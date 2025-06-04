@@ -3,10 +3,24 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "bun --watch run src/index.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun run src/database/migrate.ts",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:check": "drizzle-kit check"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "^1.2.15",
+    "drizzle-kit": "^0.31.1"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "discord-api-types": "^0.38.11",
+    "discord.js": "^14.19.3",
+    "drizzle-orm": "^0.44.2"
   }
 }

@@ -2,85 +2,114 @@
 
 ## Current Work Focus
 
-**Task Thread System Implementation**: Implementing the core task thread architecture for Ery Discord moderation bot with context-aware AI processing and tool execution.
+**Task Thread System Implementation**: Core task thread architecture is now implemented with context-aware message fetching and thread lifecycle management. Ready for AI integration and tool system implementation.
 
 ## Recent Changes
 
-- **Memory Bank Initialization**: Created core memory bank files to establish project documentation structure
-- **Project Structure Analysis**: Reviewed existing minimal project setup with basic Bun/TypeScript configuration
-- **Task Thread System Design**: Updated memory bank with comprehensive task thread architecture
-- **Tool System Definition**: Documented complete set of Discord API tools for task thread execution
-- **Architecture Evolution**: Shifted from simple event-driven to task thread-based processing model
+- **Dependencies Installed**: discord.js, discord-api-types, drizzle-orm, drizzle-kit (using Bun's native SQLite)
+- **Database Schema Created**: Complete schema for all tables including task threads, tools, users, servers, moderation
+- **Database Connection**: Implemented with Bun SQLite, now uses drizzle-orm migrations
+- **Database Migrations**: 
+  - Set up drizzle-kit for generating and managing migrations
+  - Created initial migration from schema (0000_tricky_ultimo.sql)
+  - Added indices directly to drizzle schemas
+  - Generated additional migrations for indices (0001_gorgeous_lily_hollister.sql, 0002_odd_skreet.sql)
+  - Database initialization runs all migrations automatically
+  - Removed legacy table creation functions
+  - Created migration scripts and npm commands
+  - All indices now managed through drizzle-kit migrations
+- **Configuration System**: Created config with Discord, database, task thread, and AI settings
+- **Core Utilities**: Logger with colored output, UUID generator, composite ID utilities
+- **Discord Client**: Bot client with all required intents and partials
+- **Task Thread System**:
+  - Types defined for task threads and tool executions
+  - Context Manager fetches recent message history (20 messages within 30 minutes)
+  - Task Thread Manager handles thread lifecycle, channel isolation, and cleanup
+- **Event Handlers**: Ready event (sets presence) and messageCreate (creates task threads)
+- **Main Entry Point**: index.ts with graceful shutdown handling
 
 ## Current State
 
 ### What Exists
-- Basic Bun project structure with TypeScript
-- Empty `src/index.ts` file (entry point)
-- Basic `package.json` with minimal dependencies
-- Complete memory bank documentation structure
+- Complete project structure with TypeScript configuration
+- Database schema and connection with migration-based initialization
+- Drizzle-kit integration for database migrations
+- Core task thread system with context fetching
+- Basic Discord bot that connects and responds to messages
+- Event-driven architecture with message handling
+- Logging system with configurable levels
+- Environment configuration template
+- Migration scripts and database management commands
 
 ### What's Missing
-- Discord.js and related dependencies installation
-- Database setup with Drizzle ORM and SQLite
-- Core bot architecture implementation
-- Discord bot token configuration
-- Basic event handlers and command structure
+- Tool system implementation (Discord API wrappers)
+- AI agent integration for processing task threads
+- Moderation module (ban, kick, timeout, etc.)
+- Community module (events, polls, engagement)
+- Interaction module (conversational AI, queries)
+- Actual task thread processing logic
+- Tool execution framework
 
 ## Next Steps
 
-1. **Install Dependencies**: Add discord.js, drizzle-orm, and task thread related packages
-2. **Environment Setup**: Create environment configuration for Discord bot token
-3. **Database Schema**: Design schema including task_threads and tool_executions tables
-4. **Task Thread Manager**: Implement core task thread creation and lifecycle management
-5. **Context Manager**: Build message history fetching and context formatting system
-6. **Tool System**: Create standardized tool execution framework with Discord API wrappers
-7. **Event Handler**: Implement message event handling that triggers task thread creation
-8. **AI Agent Integration**: Connect AI processing with task thread context and tool execution
+1. **Create Tool System Base**: Implement tool types and execution framework
+2. **Implement Discord Tools**: Create wrappers for all Discord API operations
+3. **AI Agent Stub**: Create placeholder AI processing that can execute tools
+4. **Test Basic Flow**: Verify message → thread → tool execution pipeline
+5. **Moderation Tools**: Implement ban_member, kick_member, timeout_member, etc.
+6. **Interaction Tools**: Implement send_message, add_reaction, create_thread, etc.
+7. **Information Tools**: Implement fetch_messages, get_member_info, search_messages, etc.
 
 ## Active Decisions and Considerations
 
 ### Architecture Decisions
-- **Task Thread Architecture**: One active thread per channel with parallel processing across channels
-- **Context-Aware Processing**: Always provide recent message history to AI for intelligent decisions
-- **Tool-Based Actions**: All Discord operations performed through standardized, auditable tools
-- **Modular Design**: Separate modules for task threads, tools, context management, and AI processing
-- **Event-Driven**: React to Discord message events to trigger task thread creation
-- **Type Safety**: Full TypeScript implementation for reliability across all components
-- **Database First**: Design schema including task thread state and tool execution logs
+- **Bun Native SQLite**: Using Bun's built-in SQLite instead of better-sqlite3
+- **No dotenv**: Leveraging Bun's automatic .env file loading
+- **Type-Safe Imports**: Using `type` imports for TypeScript types per verbatimModuleSyntax
+- **Channel Type Checking**: Handling both guild channels and DMs properly
+- **Memory + Database**: Hybrid approach with in-memory cache and persistent storage
+- **Cleanup Interval**: 1-minute interval to clean up inactive threads (5-minute timeout)
 
 ### Development Preferences
-- **Bun Runtime**: Leveraging Bun's performance benefits over Node.js
-- **Modern TypeScript**: Using latest TypeScript features and patterns
-- **Drizzle ORM**: Type-safe database operations over raw SQL
-- **Incremental Development**: Build and test features incrementally
+- **Incremental Testing**: Build and test each component before moving to the next
+- **Type Safety First**: Ensuring all Discord API interactions are properly typed
+- **Error Resilience**: Comprehensive error handling at every level
+- **Modular Tools**: Each tool is independent and can be tested separately
 
 ## Important Patterns and Insights
 
-### Project Organization
-- Memory bank serves as single source of truth for project state
-- Clear separation between documentation and implementation
-- Modular architecture allows independent feature development
+### Task Thread Flow
+1. Message received → Check thread limits
+2. Create/get active thread for channel
+3. Fetch context (recent messages)
+4. Process with AI (TODO)
+5. Execute tools based on AI decisions (TODO)
+6. Complete thread with results
 
-### Technical Patterns
-- Event-driven architecture for Discord interactions
-- Strategy pattern for different moderation actions
-- Configuration-driven behavior for server customization
-- Learning system for continuous improvement
+### Context Management
+- Fetches up to 20 messages within 30-minute window
+- Includes message metadata (attachments, mentions, links)
+- Formats context for AI consumption
+- Handles both text channels and DMs
+
+### Thread Lifecycle
+- One active thread per channel at a time
+- 5-minute timeout for inactive threads
+- Automatic cleanup every minute
+- Thread state persisted to database
 
 ## Current Challenges
 
-1. **Task Thread Concurrency**: Managing multiple parallel task threads without resource conflicts
-2. **Context Size Management**: Balancing message history size with AI processing limits
-3. **Thread Lifecycle**: Proper cleanup and state management for task thread completion
-4. **Database Design**: Schema design for task thread state, tool executions, and audit logs
-5. **Error Handling**: Robust error handling for task thread failures and tool execution errors
-6. **Memory Management**: Preventing memory leaks from long-running or abandoned task threads
+1. **AI Integration**: Need to decide on AI provider integration approach
+2. **Tool Permission System**: Ensuring bot has permissions before executing tools
+3. **Rate Limiting**: Discord.js handles this, but need to monitor
+4. **Testing Strategy**: How to test tool execution without affecting real servers
+5. **Error Recovery**: Handling partial tool execution failures
 
 ## Learning and Project Insights
 
-- Discord.js library handles API rate limiting automatically
-- SQLite is sufficient for initial development but may need scaling consideration
-- Modular architecture is crucial for maintainability
-- Documentation-first approach helps maintain project clarity
-- TypeScript provides significant benefits for Discord API interactions
+- Bun's built-in SQLite is performant and reduces dependencies
+- Discord.js v14 has excellent TypeScript support
+- Task thread pattern provides good isolation and concurrency control
+- Context window of 20 messages seems reasonable for most moderation decisions
+- Need to carefully handle permissions for each Discord operation

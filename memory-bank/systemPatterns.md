@@ -172,6 +172,7 @@ Task Thread → Tool Request → Permission Check → API Call → Result Loggin
 - **Webhook Support**: For external integrations
 
 ### Database Integration
+- **Bun SQLite**: Use Bun's builtin SQLite library for database operations
 - **Connection Pooling**: Efficient database connections
 - **Migration System**: Version-controlled schema changes
 - **Backup Strategy**: Automated backups with retention

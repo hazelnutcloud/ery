@@ -40,6 +40,11 @@ bun install          # Install dependencies
 bun run src/index.ts     # Run development server
 ```
 
+### Dependency Management
+- **Installation Pattern**: Use `bun install <package>` to install dependencies one-by-one instead of editing package.json directly
+- **SQLite Usage**: Use Bun's builtin SQLite library instead of installing external SQLite packages
+- **Package Management**: Let Bun handle package.json updates automatically during installation
+
 ### Project Structure
 ```
 ery/

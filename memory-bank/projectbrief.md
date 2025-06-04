@@ -16,8 +16,14 @@ Ery is an AI agent designed to act as a discord server moderator. The agent is c
 - **Runtime**: BunJS
 - **Language**: TypeScript
 - **Deployment**: Docker image deployed on fly.io
-- **Database**: SQLite for persistent storage
+- **Database**: SQLite for persistent storage using Bun's builtin SQLite library
 - **Libraries**: 
   - `discord.js` for Discord API interactions
   - `discord-api-types` for Discord API type definitions
   - `drizzle-orm` for database interactions
+
+## Development Guidelines
+
+- **Dependency Management**: Use `bun install <package>` to install dependencies one-by-one instead of editing package.json directly
+- **SQLite Usage**: Use Bun's builtin SQLite library instead of installing external SQLite packages
+- **Package Management**: Let Bun handle package.json updates automatically during installation
