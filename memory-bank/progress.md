@@ -195,3 +195,13 @@ The bot now has a complete AI-powered pipeline that can:
 5. Log everything for audit and improvement
 
 **Ready for production testing with Discord bot token and OpenRouter API key!**
+
+### Agent Loop-Based Refactoring (Just Completed!)
+- ✅ **Loop-Based Processing**: Agent now runs in a continuous loop processing tool calls
+- ✅ **Tool Result Feedback**: Tool execution results are sent back to AI as conversation context
+- ✅ **Content Discarding**: AI response content is discarded - only tool calls matter
+- ✅ **Forced Tool Usage**: AI must use send_message tool to communicate with users
+- ✅ **Conversation State**: Maintains full conversation history with tool results
+- ✅ **Safety Limits**: Max 10 iterations and 30-second timeout to prevent infinite loops
+- ✅ **Enhanced Logging**: Tracks loop iterations and conversation message count
+- ✅ **Updated System Prompt**: Clear instructions that AI must use tools for all communication

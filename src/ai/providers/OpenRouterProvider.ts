@@ -8,6 +8,7 @@ import { config } from "../../config";
 import { logger } from "../../utils/logger";
 import type { MessageBatch } from "../../taskThreads/types";
 import type { Message } from "discord.js";
+import type { ToolExecutionResult } from "../../tools/base/ToolExecutor";
 
 export interface AIResponse {
   content?: string;
@@ -31,6 +32,7 @@ export interface ProcessingContext {
   batch: MessageBatch;
   availableTools: ChatCompletionTool[];
   systemPrompt: string;
+  conversationHistory?: ChatCompletionMessageParam[];
 }
 
 export class OpenRouterProvider {
@@ -154,11 +156,81 @@ export class OpenRouterProvider {
   }
 
   /**
+   * Continue conversation with tool results
+   */
+  async continueConversation(
+    conversationHistory: ChatCompletionMessageParam[],
+    availableTools: ChatCompletionTool[]
+  ): Promise<AIResponse> {
+    if (!this.isReady()) {
+      throw new Error("OpenRouter provider is not configured");
+    }
+
+    try {
+      const model = config.ai.model;
+
+      logger.debug(
+        `Continuing conversation with model ${model}, ${conversationHistory.length} messages, ${availableTools.length} tools`
+      );
+
+      const completion = await this.client.chat.completions.create({
+        model: model,
+        messages: conversationHistory,
+        tools: availableTools.length > 0 ? availableTools : undefined,
+        tool_choice: availableTools.length > 0 ? "auto" : undefined,
+        temperature: config.ai.temperature,
+        max_tokens: config.ai.maxTokens,
+      });
+
+      const choice = completion.choices[0];
+      if (!choice) {
+        throw new Error("No response choices returned from AI");
+      }
+
+      const response: AIResponse = {
+        content: choice.message.content || undefined,
+        toolCalls: choice.message.tool_calls?.map((call) => ({
+          id: call.id,
+          type: call.type,
+          function: {
+            name: call.function.name,
+            arguments: call.function.arguments,
+          },
+        })),
+        finishReason: choice.finish_reason || "unknown",
+        usage: completion.usage
+          ? {
+              promptTokens: completion.usage.prompt_tokens,
+              completionTokens: completion.usage.completion_tokens,
+              totalTokens: completion.usage.total_tokens,
+            }
+          : undefined,
+      };
+
+      logger.debug(
+        `AI response: ${response.content ? "content" : "no content"}, ${
+          response.toolCalls?.length || 0
+        } tool calls`
+      );
+
+      return response;
+    } catch (error) {
+      logger.error("OpenRouter API call failed:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Build messages array for AI processing
    */
   private buildMessages(
     context: ProcessingContext
   ): ChatCompletionMessageParam[] {
+    // If we have conversation history, use it instead of building from batch
+    if (context.conversationHistory) {
+      return [...context.conversationHistory];
+    }
+
     const messages: ChatCompletionMessageParam[] = [];
 
     // Add system prompt
@@ -186,6 +258,101 @@ export class OpenRouterProvider {
     }
 
     return messages;
+  }
+
+  /**
+   * Build initial conversation from message batch
+   */
+  buildInitialConversation(
+    batch: MessageBatch,
+    systemPrompt: string
+  ): ChatCompletionMessageParam[] {
+    const messages: ChatCompletionMessageParam[] = [];
+
+    // Add system prompt
+    messages.push({
+      role: "system",
+      content: systemPrompt,
+    });
+
+    // Add message history from batch (in chronological order)
+    const sortedMessages = [...batch.messages].sort(
+      (a, b) => a.createdTimestamp - b.createdTimestamp
+    );
+
+    for (const message of sortedMessages) {
+      // Skip bot messages to avoid confusion
+      if (message.author.bot) continue;
+
+      const content = this.formatMessageContent(message);
+      if (content.trim().length === 0) continue;
+
+      messages.push({
+        role: "user",
+        content: `${message.author.username}: ${content}`,
+      });
+    }
+
+    return messages;
+  }
+
+  /**
+   * Add tool call and results to conversation history
+   */
+  addToolCallToConversation(
+    conversation: ChatCompletionMessageParam[],
+    toolCalls: Array<{
+      id: string;
+      type: "function";
+      function: { name: string; arguments: string };
+    }>,
+    toolResults: ToolExecutionResult[]
+  ): ChatCompletionMessageParam[] {
+    const updatedConversation = [...conversation];
+
+    // Add assistant message with tool calls
+    updatedConversation.push({
+      role: "assistant",
+      content: null,
+      tool_calls: toolCalls.map((call) => ({
+        id: call.id,
+        type: call.type,
+        function: call.function,
+      })),
+    });
+
+    // Add tool result messages
+    for (const result of toolResults) {
+      const toolCall = toolCalls.find((call) => call.function.name === result.toolName);
+      if (toolCall) {
+        updatedConversation.push({
+          role: "tool",
+          content: this.formatToolResult(result),
+          tool_call_id: toolCall.id,
+        });
+      }
+    }
+
+    return updatedConversation;
+  }
+
+  /**
+   * Format tool execution result for AI consumption
+   */
+  private formatToolResult(result: ToolExecutionResult): string {
+    if (result.success) {
+      return JSON.stringify({
+        success: true,
+        data: result.data,
+        executionTime: `${result.executionTimeMs}ms`,
+      });
+    } else {
+      return JSON.stringify({
+        success: false,
+        error: result.error,
+        executionTime: `${result.executionTimeMs}ms`,
+      });
+    }
   }
 
   /**

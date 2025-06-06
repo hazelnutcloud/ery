@@ -4,11 +4,13 @@ import { toolExecutor, type ToolExecutionRequest, type ToolExecutionResult } fro
 import { logger } from '../utils/logger';
 import type { MessageBatch } from '../taskThreads/types';
 import type { TaskThreadResult } from '../database/types';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 export interface AgentResponse {
   success: boolean;
-  content?: string;
   toolExecutions: ToolExecutionResult[];
+  loopIterations: number;
+  conversationMessages: number;
   error?: string;
   usage?: {
     promptTokens: number;
@@ -27,10 +29,14 @@ export class Agent {
   }
 
   /**
-   * Process a message batch and generate response
+   * Process a message batch using loop-based approach
    */
   async processMessage(batch: MessageBatch, triggerMessage: Message): Promise<AgentResponse> {
     logger.info(`Agent processing batch for channel ${batch.channelId}`);
+
+    const maxIterations = 10;
+    const maxProcessingTime = 30000; // 30 seconds
+    const startTime = Date.now();
 
     try {
       // Check if AI provider is ready
@@ -39,6 +45,8 @@ export class Agent {
           success: false,
           error: 'AI provider not configured. Please check your OpenRouter API key.',
           toolExecutions: [],
+          loopIterations: 0,
+          conversationMessages: 0,
         };
       }
 
@@ -48,20 +56,59 @@ export class Agent {
       // Get available tools for this context
       const availableTools = await toolExecutor.getAvailableFunctionSchemas(toolContext);
 
-      // Create processing context
-      const processingContext: ProcessingContext = {
-        batch,
-        availableTools,
-        systemPrompt: this.systemPrompt,
+      // Build initial conversation
+      let conversation = this.aiProvider.buildInitialConversation(batch, this.systemPrompt);
+      const allToolExecutions: ToolExecutionResult[] = [];
+      let totalUsage = {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
       };
 
-      // Get AI response
-      const aiResponse = await this.aiProvider.processContext(processingContext);
+      // Main processing loop
+      let iteration = 0;
+      while (iteration < maxIterations) {
+        // Check timeout
+        if (Date.now() - startTime > maxProcessingTime) {
+          logger.warn(`Agent processing timeout after ${maxProcessingTime}ms`);
+          break;
+        }
 
-      // Execute any tool calls
-      const toolExecutions: ToolExecutionResult[] = [];
-      if (aiResponse.toolCalls && aiResponse.toolCalls.length > 0) {
-        logger.debug(`Executing ${aiResponse.toolCalls.length} tool calls`);
+        iteration++;
+        logger.debug(`Agent loop iteration ${iteration}`);
+
+        let aiResponse: AIResponse;
+        
+        if (iteration === 1) {
+          // First iteration: use processContext
+          const processingContext: ProcessingContext = {
+            batch,
+            availableTools,
+            systemPrompt: this.systemPrompt,
+            conversationHistory: conversation,
+          };
+          aiResponse = await this.aiProvider.processContext(processingContext);
+        } else {
+          // Subsequent iterations: use continueConversation
+          aiResponse = await this.aiProvider.continueConversation(conversation, availableTools);
+        }
+
+        // Track usage
+        if (aiResponse.usage) {
+          totalUsage.promptTokens += aiResponse.usage.promptTokens;
+          totalUsage.completionTokens += aiResponse.usage.completionTokens;
+          totalUsage.totalTokens += aiResponse.usage.totalTokens;
+        }
+
+        // If no tool calls, we're done
+        if (!aiResponse.toolCalls || aiResponse.toolCalls.length === 0) {
+          logger.debug(`No tool calls in iteration ${iteration}, ending loop`);
+          break;
+        }
+
+        // Execute tool calls
+        logger.debug(`Executing ${aiResponse.toolCalls.length} tool calls in iteration ${iteration}`);
+        const iterationToolExecutions: ToolExecutionResult[] = [];
 
         for (const toolCall of aiResponse.toolCalls) {
           try {
@@ -76,39 +123,46 @@ export class Agent {
               threadId: batch.id,
             });
 
-            toolExecutions.push(execution);
+            iterationToolExecutions.push(execution);
+            allToolExecutions.push(execution);
 
             logger.debug(`Tool ${toolCall.function.name} executed: ${execution.success ? 'success' : 'failure'}`);
 
           } catch (error) {
             logger.error(`Failed to execute tool ${toolCall.function.name}:`, error);
-            toolExecutions.push({
+            const errorExecution: ToolExecutionResult = {
               executionId: `error-${Date.now()}`,
               toolName: toolCall.function.name,
               success: false,
               error: error instanceof Error ? error.message : String(error),
               executedAt: new Date(),
               executionTimeMs: 0,
-            });
+            };
+            iterationToolExecutions.push(errorExecution);
+            allToolExecutions.push(errorExecution);
           }
         }
+
+        // Add tool calls and results to conversation
+        conversation = this.aiProvider.addToolCallToConversation(
+          conversation,
+          aiResponse.toolCalls,
+          iterationToolExecutions
+        );
+
+        logger.debug(`Iteration ${iteration} completed, conversation now has ${conversation.length} messages`);
       }
 
-      // Send response message if AI provided content
-      if (aiResponse.content && aiResponse.content.trim().length > 0) {
-        try {
-          await triggerMessage.reply(aiResponse.content);
-          logger.debug('AI response sent to Discord');
-        } catch (error) {
-          logger.error('Failed to send AI response to Discord:', error);
-        }
+      if (iteration >= maxIterations) {
+        logger.warn(`Agent processing stopped after reaching max iterations (${maxIterations})`);
       }
 
       return {
         success: true,
-        content: aiResponse.content,
-        toolExecutions,
-        usage: aiResponse.usage,
+        toolExecutions: allToolExecutions,
+        loopIterations: iteration,
+        conversationMessages: conversation.length,
+        usage: totalUsage.totalTokens > 0 ? totalUsage : undefined,
       };
 
     } catch (error) {
@@ -119,6 +173,8 @@ export class Agent {
         success: false,
         error: errorMessage,
         toolExecutions: [],
+        loopIterations: 0,
+        conversationMessages: 0,
       };
     }
   }
@@ -129,32 +185,39 @@ export class Agent {
   private buildSystemPrompt(): string {
     return `You are Ery, a helpful Discord bot assistant. You can help users with various tasks by using the available tools.
 
+## CRITICAL: Communication Rules
+- You CANNOT send messages directly in your response content
+- You MUST use the send_message tool to communicate with users
+- Any text in your response content will be discarded and never sent
+- If you want to reply or send a message, use the send_message tool with appropriate parameters
+
 ## Your Capabilities:
-- Send messages to channels
-- Fetch message history
+- Send messages to channels using send_message tool
+- Fetch message history using fetch_messages tool
 - Moderate servers (ban members, etc.) - only when requested by authorized users
-- General conversation and assistance
+- General conversation and assistance through tool usage
 
 ## Guidelines:
 1. Be helpful, friendly, and concise
-2. Only use tools when necessary and requested
-3. Always explain what you're doing when using tools
+2. Always use tools to accomplish tasks and communicate
+3. Use send_message for any response you want users to see
 4. Respect user permissions - don't perform moderation actions unless the user has appropriate permissions
-5. If you can't help with something, explain why clearly
-6. When using tools, provide clear feedback about what happened
+5. If you can't help with something, use send_message to explain why
+6. Multiple tool calls in sequence are allowed and encouraged
 
 ## Tool Usage:
-- Use send_message when you need to send a message to a specific channel or reply
+- Use send_message to send any message or reply to users
 - Use fetch_messages when users want to see message history
 - Use ban_member only when explicitly requested by authorized users for moderation
+- You can call multiple tools in one response if needed
 
 ## Important Notes:
 - You are currently in a Discord server or DM
 - Users may mention you or reply to your messages
 - Always consider the context and be appropriate for the channel/server
-- Don't spam or send excessive messages
+- Use send_message for all communication - there are no exceptions
 
-Respond naturally and help users accomplish their tasks effectively.`;
+Remember: Your response content is ignored. Only tool calls matter.`;
   }
 
   /**
@@ -212,7 +275,7 @@ Respond naturally and help users accomplish their tasks effectively.`;
       success: response.success,
       summary,
       actions,
-      aiResponse: response.content || undefined,
+      aiResponse: undefined, // AI no longer provides direct content - must use tools
       processingTime: Date.now() - startTime,
       metadata: {
         usage: response.usage,
@@ -220,6 +283,8 @@ Respond naturally and help users accomplish their tasks effectively.`;
         batchId: batch.id,
         channelId: batch.channelId,
         messageCount: batch.messages.length,
+        loopIterations: response.loopIterations,
+        conversationMessages: response.conversationMessages,
       },
     };
   }

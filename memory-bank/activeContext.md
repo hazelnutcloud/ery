@@ -2,7 +2,13 @@
 
 ## Current Work Focus
 
-**Circular Dependency Removed with Event-Driven Architecture**: Successfully removed the circular dependency between MessageBatcher and TaskThreadManager by creating a high-level MessageManager that uses events to coordinate communication. The system now has a clean separation of concerns with event-driven architecture.
+**Agent Mechanics Refactored with Loop-Based Processing**: Successfully refactored the Agent to use a loop-based approach where:
+- Agent receives AI response with tool calls
+- Executes all tools and collects results  
+- Sends tool results back to AI as conversation context
+- Repeats until AI has no more tool calls
+- AI content is discarded - only tool calls matter
+- AI must use send_message tool to communicate with users
 
 ## Recent Changes
 
