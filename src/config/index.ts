@@ -36,11 +36,16 @@ export const config = {
   
   // AI Configuration
   ai: {
-    provider: process.env.AI_PROVIDER || 'openai',
-    apiKey: process.env.AI_API_KEY,
-    model: process.env.AI_MODEL || 'gpt-4',
-    temperature: 0.7,
-    maxTokens: 2000,
+    provider: process.env.AI_PROVIDER || 'openrouter',
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+    model: process.env.AI_MODEL || 'anthropic/claude-3.5-sonnet',
+    fallbackModel: process.env.AI_FALLBACK_MODEL || 'openai/gpt-4o-mini',
+    temperature: parseFloat(process.env.AI_TEMPERATURE || '0.7'),
+    maxTokens: parseInt(process.env.AI_MAX_TOKENS || '2000'),
+    // OpenRouter specific settings
+    siteName: process.env.OPENROUTER_SITE_NAME || 'Ery Discord Bot',
+    siteUrl: process.env.OPENROUTER_SITE_URL,
   },
   
   // Logging Configuration
@@ -63,7 +68,11 @@ export function validateConfig() {
     throw new Error('DISCORD_BOT_TOKEN is required in environment variables');
   }
   
+  if (config.ai.provider === 'openrouter' && !config.ai.apiKey) {
+    console.warn('OPENROUTER_API_KEY not provided - AI features will be limited');
+  }
+  
   if (config.ai.provider !== 'none' && !config.ai.apiKey) {
-    console.warn('AI_API_KEY not provided - AI features will be limited');
+    console.warn('AI API key not provided - AI features will be limited');
   }
 }

@@ -1,6 +1,6 @@
 // Database schema types for JSON columns
 
-import type { MessageBatch } from '../taskThreads/types';
+import type { MessageBatch } from "../taskThreads/types";
 
 // Task Thread Result Types
 export interface TaskThreadResult {
@@ -10,27 +10,17 @@ export interface TaskThreadResult {
     type: string;
     description: string;
     success: boolean;
-    details?: any;
+    details?: {
+      toolName: string;
+      executionId: string;
+      result: unknown;
+      error: string | undefined;
+      executionTimeMs: number;
+    };
   }>;
   aiResponse?: string;
   processingTime: number;
-  metadata?: Record<string, any>;
-}
-
-// Tool Execution Types
-export interface ToolParameters {
-  [key: string]: any;
-}
-
-export interface ToolResult {
-  success: boolean;
-  data?: any;
-  error?: string;
-  metadata?: {
-    executionTime?: number;
-    retries?: number;
-    rateLimited?: boolean;
-  };
+  metadata?: Record<string, unknown>;
 }
 
 // Re-export MessageBatch for convenience

@@ -3,6 +3,7 @@ import { initializeDatabase, closeDatabase } from './database/connection';
 import { validateConfig } from './config';
 import { logger } from './utils/logger';
 import { messageManager } from './taskThreads/messageManager';
+import { registerAllTools } from './tools';
 
 // Import event handlers
 import { handleReady } from './events/ready';
@@ -17,6 +18,9 @@ async function main() {
 
     // Initialize database
     await initializeDatabase();
+
+    // Register all tools
+    registerAllTools();
 
     // Register event handlers
     client.once('ready', () => handleReady(client));

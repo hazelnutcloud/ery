@@ -1,7 +1,7 @@
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import type { MessageBatch } from "../../taskThreads/types";
-import type { TaskThreadResult, ToolParameters, ToolResult } from "../types";
+import type { TaskThreadResult } from "../types";
 
 export const taskThreads = sqliteTable(
   "task_threads",

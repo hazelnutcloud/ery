@@ -1,4 +1,5 @@
 import { Message } from 'discord.js';
+import type { TaskThreadResult } from '../database/types';
 
 export type TaskThreadStatus = 'active' | 'completed' | 'failed';
 export type ToolStatus = 'pending' | 'success' | 'failed';
@@ -23,7 +24,7 @@ export interface TaskThread {
   batch: MessageBatch;
   createdAt: Date;
   completedAt?: Date;
-  result?: any;
+  result?: TaskThreadResult;
   error?: string;
 }
 

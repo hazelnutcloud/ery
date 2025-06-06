@@ -1,15 +1,17 @@
-import { db } from '../database/connection';
-import { taskThreads } from '../database/schema';
-import { eq, and, sql } from 'drizzle-orm';
-import { generateId } from '../utils/uuid';
-import { logger } from '../utils/logger';
-import { config } from '../config';
-import type { 
-  TaskThread, 
-  TaskThreadStatus, 
+import { db } from "../database/connection";
+import { taskThreads } from "../database/schema";
+import { eq, and, sql } from "drizzle-orm";
+import { generateId } from "../utils/uuid";
+import { logger } from "../utils/logger";
+import { config } from "../config";
+import { agent } from "../ai";
+import type {
+  TaskThread,
+  TaskThreadStatus,
   MessageBatch,
-  BatchTrigger 
-} from './types';
+  BatchTrigger,
+} from "./types";
+import type { TaskThreadResult } from "../database/types";
 
 export class TaskThreadManager {
   private activeThreads: Map<string, TaskThread[]> = new Map(); // channelId -> threads
@@ -19,7 +21,6 @@ export class TaskThreadManager {
     this.startCleanupInterval();
   }
 
-
   async spawnThread(batch: MessageBatch): Promise<TaskThread> {
     try {
       // Create new thread
@@ -28,7 +29,7 @@ export class TaskThreadManager {
         batchId: batch.id,
         channelId: batch.channelId,
         guildId: batch.guildId,
-        status: 'active',
+        status: "active",
         batch,
         createdAt: new Date(),
       };
@@ -41,7 +42,8 @@ export class TaskThreadManager {
         status: thread.status,
         createdAt: thread.createdAt,
         context: batch,
-        triggerMessageId: batch.triggerMessage?.id || batch.messages[0]?.id || 'unknown',
+        triggerMessageId:
+          batch.triggerMessage?.id || batch.messages[0]?.id || "unknown",
       });
 
       // Cache in memory
@@ -49,27 +51,35 @@ export class TaskThreadManager {
       channelThreads.push(thread);
       this.activeThreads.set(batch.channelId, channelThreads);
 
-      logger.info(`Spawned new task thread ${thread.id} for batch ${batch.id} in channel ${batch.channelId} (trigger: ${batch.triggerType})`);
-      
-      // TODO: Process the thread with AI
-      // This is where we'll integrate the AI agent to process the batch
-      // and determine what actions to take
-      
+      logger.info(
+        `Spawned new task thread ${thread.id} for batch ${batch.id} in channel ${batch.channelId} (trigger: ${batch.triggerType})`
+      );
+
+      // Process the thread with AI in the background
+      this.processThreadWithAI(thread).catch((error) => {
+        logger.error(`Failed to process thread ${thread.id} with AI:`, error);
+        this.failThread(thread.id, `AI processing failed: ${error.message}`);
+      });
+
       return thread;
     } catch (error) {
-      logger.error('Failed to spawn task thread:', error);
+      logger.error("Failed to spawn task thread:", error);
       throw error;
     }
   }
 
-  async completeThread(threadId: string, result: any): Promise<void> {
+  async completeThread(
+    threadId: string,
+    result: TaskThreadResult
+  ): Promise<void> {
     try {
       const completedAt = new Date();
-      
+
       // Update database
-      await db.update(taskThreads)
+      await db
+        .update(taskThreads)
         .set({
-          status: 'completed',
+          status: "completed",
           completedAt,
           result: result,
         })
@@ -88,11 +98,12 @@ export class TaskThreadManager {
   async failThread(threadId: string, error: string): Promise<void> {
     try {
       const completedAt = new Date();
-      
+
       // Update database
-      await db.update(taskThreads)
+      await db
+        .update(taskThreads)
         .set({
-          status: 'failed',
+          status: "failed",
           completedAt,
           error,
         })
@@ -116,16 +127,17 @@ export class TaskThreadManager {
     }
 
     // Check database
-    const dbThreads = await db.select()
+    const dbThreads = await db
+      .select()
       .from(taskThreads)
       .where(
         and(
           eq(taskThreads.channelId, channelId),
-          eq(taskThreads.status, 'active')
+          eq(taskThreads.status, "active")
         )
       );
 
-    const threads: TaskThread[] = dbThreads.map(dbThread => {
+    const threads: TaskThread[] = dbThreads.map((dbThread) => {
       const batch = dbThread.context;
       return {
         id: dbThread.id,
@@ -135,7 +147,9 @@ export class TaskThreadManager {
         status: dbThread.status as TaskThreadStatus,
         batch,
         createdAt: new Date(dbThread.createdAt),
-        completedAt: dbThread.completedAt ? new Date(dbThread.completedAt) : undefined,
+        completedAt: dbThread.completedAt
+          ? new Date(dbThread.completedAt)
+          : undefined,
         result: dbThread.result || undefined,
         error: dbThread.error || undefined,
       };
@@ -155,30 +169,31 @@ export class TaskThreadManager {
       const cutoffTime = new Date(Date.now() - timeoutMs);
 
       // Find inactive threads
-      const inactiveThreads = await db.select()
+      const inactiveThreads = await db
+        .select()
         .from(taskThreads)
         .where(
           and(
-            eq(taskThreads.status, 'active'),
+            eq(taskThreads.status, "active"),
             sql`${taskThreads.createdAt} < ${cutoffTime.toISOString()}`
           )
         );
 
       for (const thread of inactiveThreads) {
-        await this.failThread(thread.id, 'Thread timed out due to inactivity');
+        await this.failThread(thread.id, "Thread timed out due to inactivity");
       }
 
       if (inactiveThreads.length > 0) {
         logger.info(`Cleaned up ${inactiveThreads.length} inactive threads`);
       }
     } catch (error) {
-      logger.error('Failed to cleanup inactive threads:', error);
+      logger.error("Failed to cleanup inactive threads:", error);
     }
   }
 
   private removeThreadFromCache(threadId: string): void {
     for (const [channelId, threads] of this.activeThreads.entries()) {
-      const index = threads.findIndex(t => t.id === threadId);
+      const index = threads.findIndex((t) => t.id === threadId);
       if (index !== -1) {
         threads.splice(index, 1);
         if (threads.length === 0) {
@@ -203,16 +218,50 @@ export class TaskThreadManager {
   }
 
   /**
+   * Process a thread with AI
+   */
+  private async processThreadWithAI(thread: TaskThread): Promise<void> {
+    try {
+      logger.debug(`Processing thread ${thread.id} with AI`);
+
+      // Ensure we have a trigger message
+      const triggerMessage =
+        thread.batch.triggerMessage || thread.batch.messages[0];
+      if (!triggerMessage) {
+        throw new Error("No trigger message available for AI processing");
+      }
+
+      // Process with AI agent
+      const result = await agent.processTaskThread(
+        thread.batch,
+        triggerMessage
+      );
+
+      // Complete the thread with the result
+      await this.completeThread(thread.id, result);
+
+      logger.info(
+        `Thread ${thread.id} completed successfully with AI processing`
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      logger.error(`AI processing failed for thread ${thread.id}:`, error);
+
+      // Fail the thread
+      await this.failThread(thread.id, errorMessage);
+    }
+  }
+
+  /**
    * Get active thread count for a guild
    */
   async getActiveThreadCount(guildId: string): Promise<number> {
-    const result = await db.select({ count: sql<number>`count(*)` })
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
       .from(taskThreads)
       .where(
-        and(
-          eq(taskThreads.guildId, guildId),
-          eq(taskThreads.status, 'active')
-        )
+        and(eq(taskThreads.guildId, guildId), eq(taskThreads.status, "active"))
       );
 
     return result[0]?.count || 0;
@@ -240,12 +289,13 @@ export class TaskThreadManager {
   async getThread(threadId: string): Promise<TaskThread | null> {
     // Check cache first
     for (const threads of this.activeThreads.values()) {
-      const thread = threads.find(t => t.id === threadId);
+      const thread = threads.find((t) => t.id === threadId);
       if (thread) return thread;
     }
 
     // Check database
-    const dbThreads = await db.select()
+    const dbThreads = await db
+      .select()
       .from(taskThreads)
       .where(eq(taskThreads.id, threadId))
       .limit(1);
@@ -262,7 +312,9 @@ export class TaskThreadManager {
       status: dbThread.status as TaskThreadStatus,
       batch,
       createdAt: new Date(dbThread.createdAt),
-      completedAt: dbThread.completedAt ? new Date(dbThread.completedAt) : undefined,
+      completedAt: dbThread.completedAt
+        ? new Date(dbThread.completedAt)
+        : undefined,
       result: dbThread.result || undefined,
       error: dbThread.error || undefined,
     };
@@ -271,8 +323,8 @@ export class TaskThreadManager {
   /**
    * Get statistics about current threads
    */
-  getThreadStats(): { 
-    totalActiveThreads: number; 
+  getThreadStats(): {
+    totalActiveThreads: number;
     threadsByChannel: Record<string, number>;
     threadsByGuild: Record<string, number>;
   } {
@@ -285,7 +337,8 @@ export class TaskThreadManager {
       totalActiveThreads += threads.length;
 
       for (const thread of threads) {
-        threadsByGuild[thread.guildId] = (threadsByGuild[thread.guildId] || 0) + 1;
+        threadsByGuild[thread.guildId] =
+          (threadsByGuild[thread.guildId] || 0) + 1;
       }
     }
 
