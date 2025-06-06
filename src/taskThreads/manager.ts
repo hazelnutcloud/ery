@@ -1,42 +1,35 @@
-import { Message } from 'discord.js';
 import { db } from '../database/connection';
-import { taskThreads, toolExecutions } from '../database/schema';
+import { taskThreads } from '../database/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { generateId } from '../utils/uuid';
 import { logger } from '../utils/logger';
 import { config } from '../config';
-import { contextManager } from './contextManager';
-import type { TaskThread, TaskThreadManager as ITaskThreadManager, TaskThreadStatus } from './types';
+import type { 
+  TaskThread, 
+  TaskThreadStatus, 
+  MessageBatch,
+  BatchTrigger 
+} from './types';
 
-class TaskThreadManagerImpl implements ITaskThreadManager {
-  private activeThreads: Map<string, TaskThread> = new Map();
+export class TaskThreadManager {
+  private activeThreads: Map<string, TaskThread[]> = new Map(); // channelId -> threads
   private cleanupInterval?: NodeJS.Timeout;
 
   constructor() {
     this.startCleanupInterval();
   }
 
-  async createThread(message: Message): Promise<TaskThread> {
-    const channelId = message.channel.id;
-    
-    // Check if there's already an active thread for this channel
-    const existingThread = await this.getActiveThread(channelId);
-    if (existingThread) {
-      logger.debug(`Active thread already exists for channel ${channelId}`);
-      return existingThread;
-    }
 
+  async spawnThread(batch: MessageBatch): Promise<TaskThread> {
     try {
-      // Fetch context for the thread
-      const context = await contextManager.fetchContext(message);
-      
       // Create new thread
       const thread: TaskThread = {
         id: generateId(),
-        channelId,
-        guildId: message.guild?.id || 'DM',
+        batchId: batch.id,
+        channelId: batch.channelId,
+        guildId: batch.guildId,
         status: 'active',
-        context,
+        batch,
         createdAt: new Date(),
       };
 
@@ -47,17 +40,24 @@ class TaskThreadManagerImpl implements ITaskThreadManager {
         guildId: thread.guildId,
         status: thread.status,
         createdAt: thread.createdAt,
-        context: JSON.stringify(context),
-        triggerMessageId: message.id,
+        context: batch,
+        triggerMessageId: batch.triggerMessage?.id || batch.messages[0]?.id || 'unknown',
       });
 
       // Cache in memory
-      this.activeThreads.set(channelId, thread);
+      const channelThreads = this.activeThreads.get(batch.channelId) || [];
+      channelThreads.push(thread);
+      this.activeThreads.set(batch.channelId, channelThreads);
 
-      logger.info(`Created new task thread ${thread.id} for channel ${channelId}`);
+      logger.info(`Spawned new task thread ${thread.id} for batch ${batch.id} in channel ${batch.channelId} (trigger: ${batch.triggerType})`);
+      
+      // TODO: Process the thread with AI
+      // This is where we'll integrate the AI agent to process the batch
+      // and determine what actions to take
+      
       return thread;
     } catch (error) {
-      logger.error('Failed to create task thread:', error);
+      logger.error('Failed to spawn task thread:', error);
       throw error;
     }
   }
@@ -71,17 +71,12 @@ class TaskThreadManagerImpl implements ITaskThreadManager {
         .set({
           status: 'completed',
           completedAt,
-          result: JSON.stringify(result),
+          result: result,
         })
         .where(eq(taskThreads.id, threadId));
 
       // Remove from active threads cache
-      for (const [channelId, thread] of this.activeThreads.entries()) {
-        if (thread.id === threadId) {
-          this.activeThreads.delete(channelId);
-          break;
-        }
-      }
+      this.removeThreadFromCache(threadId);
 
       logger.info(`Completed task thread ${threadId}`);
     } catch (error) {
@@ -104,12 +99,7 @@ class TaskThreadManagerImpl implements ITaskThreadManager {
         .where(eq(taskThreads.id, threadId));
 
       // Remove from active threads cache
-      for (const [channelId, thread] of this.activeThreads.entries()) {
-        if (thread.id === threadId) {
-          this.activeThreads.delete(channelId);
-          break;
-        }
-      }
+      this.removeThreadFromCache(threadId);
 
       logger.error(`Failed task thread ${threadId}: ${error}`);
     } catch (error) {
@@ -118,11 +108,11 @@ class TaskThreadManagerImpl implements ITaskThreadManager {
     }
   }
 
-  async getActiveThread(channelId: string): Promise<TaskThread | null> {
+  async getActiveThreads(channelId: string): Promise<TaskThread[]> {
     // Check memory cache first
-    const cachedThread = this.activeThreads.get(channelId);
-    if (cachedThread) {
-      return cachedThread;
+    const cachedThreads = this.activeThreads.get(channelId);
+    if (cachedThreads && cachedThreads.length > 0) {
+      return cachedThreads;
     }
 
     // Check database
@@ -133,31 +123,30 @@ class TaskThreadManagerImpl implements ITaskThreadManager {
           eq(taskThreads.channelId, channelId),
           eq(taskThreads.status, 'active')
         )
-      )
-      .limit(1);
+      );
 
-    const dbThread = dbThreads[0];
-    if (!dbThread) {
-      return null;
+    const threads: TaskThread[] = dbThreads.map(dbThread => {
+      const batch = dbThread.context;
+      return {
+        id: dbThread.id,
+        batchId: batch.id,
+        channelId: dbThread.channelId,
+        guildId: dbThread.guildId,
+        status: dbThread.status as TaskThreadStatus,
+        batch,
+        createdAt: new Date(dbThread.createdAt),
+        completedAt: dbThread.completedAt ? new Date(dbThread.completedAt) : undefined,
+        result: dbThread.result || undefined,
+        error: dbThread.error || undefined,
+      };
+    });
+
+    // Cache them
+    if (threads.length > 0) {
+      this.activeThreads.set(channelId, threads);
     }
 
-    // Reconstruct thread from database
-    const thread: TaskThread = {
-      id: dbThread.id,
-      channelId: dbThread.channelId,
-      guildId: dbThread.guildId,
-      status: dbThread.status as TaskThreadStatus,
-      context: JSON.parse(dbThread.context as string),
-      createdAt: new Date(dbThread.createdAt),
-      completedAt: dbThread.completedAt ? new Date(dbThread.completedAt) : undefined,
-      result: dbThread.result ? JSON.parse(dbThread.result as string) : undefined,
-      error: dbThread.error || undefined,
-    };
-
-    // Cache it
-    this.activeThreads.set(channelId, thread);
-
-    return thread;
+    return threads;
   }
 
   async cleanupInactiveThreads(): Promise<void> {
@@ -184,6 +173,19 @@ class TaskThreadManagerImpl implements ITaskThreadManager {
       }
     } catch (error) {
       logger.error('Failed to cleanup inactive threads:', error);
+    }
+  }
+
+  private removeThreadFromCache(threadId: string): void {
+    for (const [channelId, threads] of this.activeThreads.entries()) {
+      const index = threads.findIndex(t => t.id === threadId);
+      if (index !== -1) {
+        threads.splice(index, 1);
+        if (threads.length === 0) {
+          this.activeThreads.delete(channelId);
+        }
+        break;
+      }
     }
   }
 
@@ -223,6 +225,74 @@ class TaskThreadManagerImpl implements ITaskThreadManager {
     const count = await this.getActiveThreadCount(guildId);
     return count >= config.taskThread.maxActiveThreadsPerGuild;
   }
-}
 
-export const taskThreadManager = new TaskThreadManagerImpl();
+  /**
+   * Get active thread count for a specific channel
+   */
+  async getActiveThreadCountForChannel(channelId: string): Promise<number> {
+    const threads = await this.getActiveThreads(channelId);
+    return threads.length;
+  }
+
+  /**
+   * Get a specific thread by ID
+   */
+  async getThread(threadId: string): Promise<TaskThread | null> {
+    // Check cache first
+    for (const threads of this.activeThreads.values()) {
+      const thread = threads.find(t => t.id === threadId);
+      if (thread) return thread;
+    }
+
+    // Check database
+    const dbThreads = await db.select()
+      .from(taskThreads)
+      .where(eq(taskThreads.id, threadId))
+      .limit(1);
+
+    const dbThread = dbThreads[0];
+    if (!dbThread) return null;
+
+    const batch = dbThread.context;
+    return {
+      id: dbThread.id,
+      batchId: batch.id,
+      channelId: dbThread.channelId,
+      guildId: dbThread.guildId,
+      status: dbThread.status as TaskThreadStatus,
+      batch,
+      createdAt: new Date(dbThread.createdAt),
+      completedAt: dbThread.completedAt ? new Date(dbThread.completedAt) : undefined,
+      result: dbThread.result || undefined,
+      error: dbThread.error || undefined,
+    };
+  }
+
+  /**
+   * Get statistics about current threads
+   */
+  getThreadStats(): { 
+    totalActiveThreads: number; 
+    threadsByChannel: Record<string, number>;
+    threadsByGuild: Record<string, number>;
+  } {
+    const threadsByChannel: Record<string, number> = {};
+    const threadsByGuild: Record<string, number> = {};
+    let totalActiveThreads = 0;
+
+    for (const [channelId, threads] of this.activeThreads.entries()) {
+      threadsByChannel[channelId] = threads.length;
+      totalActiveThreads += threads.length;
+
+      for (const thread of threads) {
+        threadsByGuild[thread.guildId] = (threadsByGuild[thread.guildId] || 0) + 1;
+      }
+    }
+
+    return {
+      totalActiveThreads,
+      threadsByChannel,
+      threadsByGuild,
+    };
+  }
+}

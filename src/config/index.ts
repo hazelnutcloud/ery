@@ -23,9 +23,15 @@ export const config = {
   taskThread: {
     contextMessageLimit: 20, // Number of messages to include in context
     contextTimeframeMinutes: 30, // Time window for context messages
-    maxActiveThreadsPerGuild: 10, // Maximum concurrent threads per server
+    maxActiveThreadsPerGuild: 50, // Maximum concurrent threads per server
     threadTimeoutMs: 300000, // 5 minutes timeout for inactive threads
     cleanupIntervalMs: 60000, // 1 minute interval for cleanup
+    
+    // Message Batching Configuration
+    batchMessageCount: 5, // Number of messages to trigger a batch
+    batchTimeWindowMs: 30000, // 30 seconds - time window to trigger a batch
+    maxQueueAge: 300000, // 5 minutes - max age before queues are cleaned up
+    queueCleanupIntervalMs: 60000, // 1 minute interval for queue cleanup
   },
   
   // AI Configuration

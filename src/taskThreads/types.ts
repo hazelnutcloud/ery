@@ -2,43 +2,43 @@ import { Message } from 'discord.js';
 
 export type TaskThreadStatus = 'active' | 'completed' | 'failed';
 export type ToolStatus = 'pending' | 'success' | 'failed';
+export type BatchTrigger = 'message_count' | 'time_window' | 'bot_mention';
 
-export interface TaskThreadContext {
-  messages: Message[];
+export interface MessageBatch {
+  id: string;
   channelId: string;
   guildId: string;
-  triggerMessage: Message;
-  timestamp: Date;
+  messages: Message[];
+  createdAt: Date;
+  triggerType: BatchTrigger;
+  triggerMessage?: Message; // The message that triggered the batch (for bot mentions)
 }
 
 export interface TaskThread {
   id: string;
+  batchId: string;
   channelId: string;
   guildId: string;
   status: TaskThreadStatus;
-  context: TaskThreadContext;
+  batch: MessageBatch;
   createdAt: Date;
   completedAt?: Date;
   result?: any;
   error?: string;
 }
 
-export interface ToolExecution {
-  id: string;
-  threadId: string;
-  toolName: string;
-  parameters: any;
-  result?: any;
-  status: ToolStatus;
-  executedAt: Date;
-  executionDurationMs?: number;
-  error?: string;
+export interface MessageQueue {
+  channelId: string;
+  guildId: string;
+  messages: Message[];
+  lastMessageAt: Date;
+  timeoutId?: NodeJS.Timeout;
 }
 
-export interface TaskThreadManager {
-  createThread(message: Message): Promise<TaskThread>;
-  completeThread(threadId: string, result: any): Promise<void>;
-  failThread(threadId: string, error: string): Promise<void>;
-  getActiveThread(channelId: string): Promise<TaskThread | null>;
-  cleanupInactiveThreads(): Promise<void>;
+
+export interface MessageBatcher {
+  addMessage(message: Message): Promise<void>;
+  getQueue(channelId: string): MessageQueue | null;
+  processBatch(channelId: string, triggerType: BatchTrigger, triggerMessage?: Message): Promise<MessageBatch>;
+  cleanupQueues(): Promise<void>;
 }

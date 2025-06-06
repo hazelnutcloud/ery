@@ -9,7 +9,8 @@
     "db:migrate": "bun run src/database/migrate.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:check": "drizzle-kit check"
+    "db:check": "drizzle-kit check",
+    "build": "bun build src/index.ts --outdir=dist --target=bun"
   },
   "devDependencies": {
     "@types/bun": "^1.2.15",

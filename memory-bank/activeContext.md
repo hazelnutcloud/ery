@@ -2,7 +2,7 @@
 
 ## Current Work Focus
 
-**Task Thread System Implementation**: Core task thread architecture is now implemented with context-aware message fetching and thread lifecycle management. Ready for AI integration and tool system implementation.
+**Circular Dependency Removed with Event-Driven Architecture**: Successfully removed the circular dependency between MessageBatcher and TaskThreadManager by creating a high-level MessageManager that uses events to coordinate communication. The system now has a clean separation of concerns with event-driven architecture.
 
 ## Recent Changes
 
@@ -18,15 +18,46 @@
   - Removed legacy table creation functions
   - Created migration scripts and npm commands
   - All indices now managed through drizzle-kit migrations
+- **TypeScript Types for JSON Columns**: Added proper TypeScript types to all text columns with mode: "json"
+  - **Created Comprehensive Type Definitions**: Added `src/database/types.ts` with complete type definitions for all JSON columns
+  - **Server Types**: `ServerConfig`, `ModerationRule[]`, `ServerFeatures`, `CustomResponses`, `ChannelConfig`, `ChannelPermissions`
+  - **Task Thread Types**: `TaskThreadResult`, `ToolParameters`, `ToolResult` (plus existing `MessageBatch`)
+  - **Moderation Types**: `ModerationMetadata`
+  - **User Types**: `UserCustomData`
+  - **Updated All Schemas**: Applied proper `.$type<>()` annotations to all JSON columns in all table schemas
+  - **Fixed TaskThreadManager**: Updated to work with typed JSON columns (automatic serialization/deserialization)
+  - **No Database Migration Required**: Type annotations are compile-time only, no schema changes needed
+- **Major Codebase Cleanup**: Removed all unused components to simplify development
+  - **Removed Unused Database Tables**: Deleted servers, moderation, users tables and toolExecutions
+  - **Removed Unused Schema Files**: Deleted src/database/schema/servers.ts, moderation.ts, users.ts
+  - **Cleaned Up Types**: Removed all unused types from src/database/types.ts, kept only task thread related types
+  - **Removed ContextManager**: Deleted src/taskThreads/contextManager.ts as it's not being used yet
+  - **Updated Imports**: Fixed TaskThreadManager to only import used tables
+  - **Generated Migration**: Created migration 0003_simple_hercules.sql to drop unused tables from existing databases
+  - **Verified Functionality**: All migrations run successfully and code compiles correctly
 - **Configuration System**: Created config with Discord, database, task thread, and AI settings
 - **Core Utilities**: Logger with colored output, UUID generator, composite ID utilities
 - **Discord Client**: Bot client with all required intents and partials
-- **Task Thread System**:
-  - Types defined for task threads and tool executions
-  - Context Manager fetches recent message history (20 messages within 30 minutes)
-  - Task Thread Manager handles thread lifecycle, channel isolation, and cleanup
+- **Task Thread System Refactored with Message Batching**:
+  - **New Types**: Added MessageBatch, BatchTrigger, MessageQueue interfaces
+  - **MessageBatcher**: Handles message queuing and batch creation with 3 triggers:
+    1. Message count threshold (configurable, default: 5 messages)
+    2. Time window expiry (configurable, default: 30 seconds)
+    3. Bot mention (immediate trigger)
+  - **Parallel Processing**: Multiple task threads can run per channel simultaneously
+  - **No Message Overlap**: Each batch contains unique messages, no overlapping between batches
+  - **TaskThreadManager**: Refactored to spawn threads from batches instead of individual messages
+  - **ContextManager**: Updated to work with message batches instead of single trigger messages
+  - **Configuration**: Added batch-specific settings (batchMessageCount, batchTimeWindowMs, etc.)
 - **Event Handlers**: Ready event (sets presence) and messageCreate (creates task threads)
 - **Main Entry Point**: index.ts with graceful shutdown handling
+- **Architecture Refactoring - Circular Dependency Removal**:
+  - **MessageManager**: Created high-level coordinator class that manages both MessageBatcher and TaskThreadManager
+  - **Event-Driven Communication**: MessageBatcher now extends EventEmitter and emits 'batchReady' events instead of directly calling TaskThreadManager
+  - **Clean Separation**: Removed circular imports between MessageBatcher and TaskThreadManager
+  - **Centralized Control**: MessageManager handles all message processing workflow and provides unified API
+  - **Graceful Shutdown**: MessageManager.shutdown() properly cleans up all resources and event listeners
+  - **Updated Entry Points**: All components now use MessageManager instead of direct TaskThreadManager access
 
 ## Current State
 

@@ -2,7 +2,7 @@ import { client } from './bot/client';
 import { initializeDatabase, closeDatabase } from './database/connection';
 import { validateConfig } from './config';
 import { logger } from './utils/logger';
-import { taskThreadManager } from './taskThreads/manager';
+import { messageManager } from './taskThreads/messageManager';
 
 // Import event handlers
 import { handleReady } from './events/ready';
@@ -38,8 +38,8 @@ process.on('SIGTERM', shutdown);
 async function shutdown() {
   logger.info('Shutting down gracefully...');
   
-  // Stop task thread cleanup interval
-  taskThreadManager.stopCleanupInterval();
+  // Shutdown message manager (stops cleanup intervals and clears listeners)
+  messageManager.shutdown();
   
   // Disconnect from Discord
   client.destroy();
