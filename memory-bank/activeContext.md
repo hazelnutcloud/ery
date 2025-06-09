@@ -12,6 +12,11 @@
 
 ## Recent Changes
 
+- **Trigger Message Concept Removed**: Refactored messageBatcher logic to remove the concept of trigger messages entirely
+  - Removed `triggerMessage` property from `MessageBatch` interface 
+  - Updated `processBatch` method to no longer accept or store trigger message parameter
+  - Agent now uses the last message in the batch as context instead of a specific trigger message
+  - Simplified AI processing flow - batch contains all necessary context without special trigger message handling
 - **AI Context Building Refactored**: Bot messages are now included in conversation history as "assistant" role messages instead of being filtered out, preserving important context
 - **Message ID Context Integration**: All messages in conversation history now include their Discord message IDs in format [Message ID: 123456789] allowing AI to target specific messages for replies
 - **Send Message Tool Enhanced**: Replaced `reply` boolean parameter with `replyToMessageId` string parameter allowing AI to reply to any specific message by ID instead of only the trigger message

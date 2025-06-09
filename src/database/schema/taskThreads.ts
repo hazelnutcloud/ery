@@ -15,7 +15,6 @@ export const taskThreads = sqliteTable(
       .default(sql`(unixepoch())`),
     completedAt: integer("completed_at", { mode: "timestamp" }),
     context: text("context", { mode: "json" }).$type<MessageBatch>().notNull(), // Message history and metadata
-    triggerMessageId: text("trigger_message_id").notNull(),
     result: text("result", { mode: "json" }).$type<TaskThreadResult>(), // Task execution result
     error: text("error"), // Error message if failed
   },

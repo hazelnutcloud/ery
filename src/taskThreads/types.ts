@@ -12,7 +12,6 @@ export interface MessageBatch {
   messages: Message[];
   createdAt: Date;
   triggerType: BatchTrigger;
-  triggerMessage?: Message; // The message that triggered the batch (for bot mentions)
 }
 
 export interface TaskThread {
@@ -40,6 +39,6 @@ export interface MessageQueue {
 export interface MessageBatcher {
   addMessage(message: Message): Promise<void>;
   getQueue(channelId: string): MessageQueue | null;
-  processBatch(channelId: string, triggerType: BatchTrigger, triggerMessage?: Message): Promise<MessageBatch>;
+  processBatch(channelId: string, triggerType: BatchTrigger): Promise<MessageBatch>;
   cleanupQueues(): Promise<void>;
 }

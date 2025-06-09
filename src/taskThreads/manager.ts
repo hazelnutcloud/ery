@@ -42,10 +42,6 @@ export class TaskThreadManager {
         status: thread.status,
         createdAt: thread.createdAt,
         context: batch,
-        triggerMessageId:
-          batch.triggerMessage?.id ||
-          batch.messages[batch.messages.length - 1]?.id ||
-          "unknown",
       });
 
       // Cache in memory
@@ -226,19 +222,8 @@ export class TaskThreadManager {
     try {
       logger.debug(`Processing thread ${thread.id} with AI`);
 
-      // Ensure we have a trigger message
-      const triggerMessage =
-        thread.batch.triggerMessage ||
-        thread.batch.messages[thread.batch.messages.length - 1];
-      if (!triggerMessage) {
-        throw new Error("No trigger message available for AI processing");
-      }
-
       // Process with AI agent
-      const result = await agent.processTaskThread(
-        thread.batch,
-        triggerMessage
-      );
+      const result = await agent.processTaskThread(thread.batch);
 
       // Complete the thread with the result
       await this.completeThread(thread.id, result);

@@ -31,7 +31,7 @@ export class Agent {
   /**
    * Process a message batch using loop-based approach
    */
-  async processMessage(batch: MessageBatch, triggerMessage: Message): Promise<AgentResponse> {
+  async processMessage(batch: MessageBatch): Promise<AgentResponse> {
     logger.info(`Agent processing batch for channel ${batch.channelId}`);
 
     const maxIterations = 10;
@@ -50,8 +50,20 @@ export class Agent {
         };
       }
 
-      // Create tool context from trigger message
-      const toolContext = toolExecutor.createToolContext(triggerMessage);
+      // Use the last message in the batch for tool context
+      const contextMessage = batch.messages[batch.messages.length - 1];
+      if (!contextMessage) {
+        return {
+          success: false,
+          error: 'No messages available in batch for processing',
+          toolExecutions: [],
+          loopIterations: 0,
+          conversationMessages: 0,
+        };
+      }
+
+      // Create tool context from the context message
+      const toolContext = toolExecutor.createToolContext(contextMessage);
 
       // Get available tools for this context
       const availableTools = await toolExecutor.getAvailableFunctionSchemas(toolContext);
@@ -255,9 +267,9 @@ Remember: Your response content is ignored. Only tool calls matter.`;
   /**
    * Process a batch and return structured result for database storage
    */
-  async processTaskThread(batch: MessageBatch, triggerMessage: Message): Promise<TaskThreadResult> {
+  async processTaskThread(batch: MessageBatch): Promise<TaskThreadResult> {
     const startTime = Date.now();
-    const response = await this.processMessage(batch, triggerMessage);
+    const response = await this.processMessage(batch);
 
     // Generate summary
     const summary = response.success 

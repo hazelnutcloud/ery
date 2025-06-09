@@ -19,16 +19,6 @@ export class MessageBatcher extends EventEmitter {
     const channelId = message.channel.id;
     const guildId = message.guild?.id || "DM";
 
-    // Check for bot mention first (immediate trigger)
-    const botMentioned = this.isBotMentioned(message);
-    if (botMentioned) {
-      logger.debug(
-        `Bot mentioned in message ${message.id}, triggering immediate batch`
-      );
-      await this.processBatch(channelId, "bot_mention", message);
-      return;
-    }
-
     // Get or create queue for this channel
     let queue = this.queues.get(channelId);
     if (!queue) {
@@ -49,6 +39,16 @@ export class MessageBatcher extends EventEmitter {
     // Add message to queue
     queue.messages.push(message);
     queue.lastMessageAt = new Date();
+
+    // Check for bot mention first (immediate trigger)
+    const botMentioned = this.isBotMentioned(message);
+    if (botMentioned) {
+      logger.debug(
+        `Bot mentioned in message ${message.id}, triggering batch`
+      );
+      await this.processBatch(channelId, "bot_mention");
+      return;
+    }
 
     // Check if we've reached the message count threshold
     if (queue.messages.length >= config.taskThread.batchMessageCount) {
@@ -78,8 +78,7 @@ export class MessageBatcher extends EventEmitter {
 
   private async processBatch(
     channelId: string,
-    triggerType: BatchTrigger,
-    triggerMessage?: Message
+    triggerType: BatchTrigger
   ): Promise<MessageBatch> {
     const queue = this.queues.get(channelId);
     if (!queue || queue.messages.length === 0) {
@@ -100,7 +99,6 @@ export class MessageBatcher extends EventEmitter {
       messages: [...queue.messages], // Copy messages
       createdAt: new Date(),
       triggerType,
-      triggerMessage,
     };
 
     // Clear the queue for next batch
