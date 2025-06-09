@@ -244,24 +244,71 @@ export class OpenRouterProvider {
     );
 
     for (const message of sortedMessages) {
-      const content = this.formatMessageContent(message);
-      if (content.trim().length === 0) continue;
+      const formattedContent = this.formatMessageWithReplyContext(message, sortedMessages);
+      if (formattedContent.trim().length === 0) continue;
 
       // Include bot messages as assistant role, user messages as user role
       if (message.author.bot) {
         messages.push({
           role: "assistant",
-          content: `[Message ID: ${message.id}] ${content}`,
+          content: formattedContent,
         });
       } else {
         messages.push({
           role: "user",
-          content: `[Message ID: ${message.id}] ${message.author.username}: ${content}`,
+          content: formattedContent,
         });
       }
     }
 
     return messages;
+  }
+
+  /**
+   * Format a Discord message for AI consumption, including reply context.
+   */
+  private formatMessageWithReplyContext(message: Message, allMessagesInBatch: Message[]): string {
+    let formattedMessage = '';
+
+    // Add reply context if available
+    if (message.reference?.messageId) {
+      const repliedToMessage = allMessagesInBatch.find(
+        (msg) => msg.id === message.reference?.messageId
+      );
+
+      if (repliedToMessage) {
+        const repliedToContent = this.formatMessageContent(repliedToMessage);
+        const truncatedContent = this.truncateContent(
+          repliedToContent,
+          config.taskThread.replyContextMaxLength,
+          config.taskThread.replyContextTruncationSuffix
+        );
+        formattedMessage += `  ↱ Reply to [${repliedToMessage.id}]: "${truncatedContent}"\n`;
+      } else {
+        // Message not found in batch, instruct AI to fetch
+        formattedMessage += `  ↱ Reply to [${message.reference.messageId}]: Message not in batch - use fetch_messages tool to read full context\n`;
+      }
+    }
+
+    // Add the current message's content
+    const messageContent = this.formatMessageContent(message);
+    if (message.author.bot) {
+      formattedMessage += `[Message ID: ${message.id}] ${messageContent}`;
+    } else {
+      formattedMessage += `[Message ID: ${message.id}] ${message.author.username}: ${messageContent}`;
+    }
+
+    return formattedMessage;
+  }
+
+  /**
+   * Truncate content to a specified length with a suffix.
+   */
+  private truncateContent(content: string, maxLength: number, suffix: string): string {
+    if (content.length <= maxLength) {
+      return content;
+    }
+    return content.substring(0, maxLength - suffix.length) + suffix;
   }
 
   /**

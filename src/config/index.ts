@@ -34,6 +34,8 @@ export const config = {
     queueCleanupIntervalMs: 60000, // 1 minute interval for queue cleanup
     maxReplyChainDepth: 5, // Maximum depth to follow reply chains
     replyChainTimeLimit: 3600000, // 1 hour - don't fetch replies older than this
+    replyContextMaxLength: 120, // Max length for truncated replied message content
+    replyContextTruncationSuffix: '...', // Suffix for truncated content
   },
   
   // AI Configuration
