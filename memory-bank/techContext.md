@@ -3,88 +3,114 @@
 ## Technology Stack
 
 ### Runtime & Language
-- **BunJS**: Fast JavaScript runtime for optimal performance
+- **BunJS**: Fast JavaScript runtime with built-in SQLite support
 - **TypeScript**: Type-safe development with modern JavaScript features
-- **Node.js compatibility**: Leveraging existing ecosystem
+- **Node.js Ecosystem**: Compatible with existing npm packages
 
 ### Core Dependencies
 - **discord.js**: Primary Discord API interaction library
 - **discord-api-types**: TypeScript definitions for Discord API
-- **drizzle-orm**: Type-safe SQL ORM for database operations
-
-### Task Thread System Dependencies
-- **Worker Threads**: For parallel task thread execution
-- **Queue Management**: Message queuing for channel-specific thread limits
-- **Context Processing**: Message history fetching and formatting
-- **Tool Execution**: Discord API tool wrapper implementations
+- **drizzle-orm**: Type-safe SQL ORM with migration support
+- **drizzle-kit**: Database migration management
+- **openai**: AI integration (compatible with OpenRouter)
 
 ### Database
-- **SQLite**: Lightweight, file-based database for persistent storage
-- Suitable for bot data, user preferences, moderation logs, and learning data
+- **SQLite**: Lightweight, file-based database using Bun's built-in library
+- **Drizzle ORM**: Type-safe operations with automatic migrations
+- **Schema Management**: Version-controlled database changes
 
 ### Deployment
 - **Docker**: Containerized deployment for consistency
 - **fly.io**: Cloud platform for hosting and scaling
-- Supports global deployment for low-latency responses
+- **Environment Configuration**: .env-based configuration management
 
 ## Development Setup
 
 ### Prerequisites
-- Bun v1.2.15+ installed
+- Bun v1.0+ installed
 - TypeScript 5+ for development
-- Docker for containerization
+- Discord bot token and OpenRouter API key for testing
 
 ### Commands
 ```bash
-bun install          # Install dependencies
+bun install              # Install dependencies
 bun run src/index.ts     # Run development server
+bun run db:generate      # Generate database migrations
+bun run db:migrate       # Apply database migrations
 ```
 
 ### Dependency Management
-- **Installation Pattern**: Use `bun install <package>` to install dependencies one-by-one instead of editing package.json directly
-- **SQLite Usage**: Use Bun's builtin SQLite library instead of installing external SQLite packages
-- **Package Management**: Let Bun handle package.json updates automatically during installation
+- **Installation Pattern**: Use `bun install <package>` one-by-one
+- **SQLite Integration**: Use Bun's built-in SQLite instead of external packages
+- **Auto-Management**: Let Bun handle package.json updates automatically
 
-### Project Structure
+## Current Project Structure
 ```
 ery/
 ├── src/
-│   └── index.ts     # Main application entry point
-├── memory-bank/     # Cline's memory and documentation
-├── package.json     # Project configuration
-├── tsconfig.json    # TypeScript configuration
-└── README.md        # Basic project info
+│   ├── index.ts                    # Main entry point
+│   ├── ai/                         # AI integration
+│   ├── bot/                        # Discord client
+│   ├── config/                     # Configuration
+│   ├── database/                   # Database and migrations
+│   ├── events/                     # Discord event handlers
+│   ├── taskThreads/                # Core task thread system
+│   ├── tools/                      # Discord API tools
+│   └── utils/                      # Utilities
+├── memory-bank/                    # Documentation
+└── package.json                    # Dependencies and scripts
 ```
 
 ## Technical Constraints
 
-- SQLite limitations for concurrent writes (consider if scaling needed)
-- fly.io resource constraints
-- Discord bot permissions and security requirements
+### Performance Limitations
+- **SQLite Concurrency**: Limited concurrent write operations
+- **Memory Usage**: Each task thread consumes memory for context
+- **Context Size**: AI processing limited by token windows
+- **Rate Limiting**: Discord API rate limits handled by discord.js
 
-### Task Thread Specific Constraints
-- **Memory Management**: Each task thread consumes memory for context and state
-- **Concurrency Limits**: Maximum parallel task threads per server/channel
-- **Context Size Limits**: Message history size constraints for AI processing
-- **Thread Lifecycle**: Proper cleanup to prevent memory leaks
+### Resource Constraints
+- **fly.io Limits**: Memory and CPU constraints in cloud deployment
+- **Thread Lifecycle**: Automatic cleanup to prevent memory leaks
+- **Concurrent Threads**: Configurable limits per server/channel
 
 ## Architecture Decisions
 
-- **Modular Design**: Separate concerns for moderation, community features, and learning
-- **Event-Driven**: React to Discord events (messages, joins, etc.)
-- **Persistent State**: Store configuration, logs, and learning data
-- **Graceful Degradation**: Handle API failures and network issues
+### Core Design Patterns
+- **Event-Driven Architecture**: React to Discord events asynchronously
+- **Task Thread Isolation**: One active thread per channel for controlled processing
+- **Tool-Based Actions**: All Discord operations through standardized tools
+- **AI-First Processing**: All bot interactions go through AI agent
 
-### Task Thread Architecture
-- **One Thread Per Channel**: Ensure single active task thread per Discord channel
-- **Context-First Design**: Always provide recent message history to task threads
-- **Tool-Based Actions**: All Discord operations performed through standardized tools
-- **Parallel Processing**: Support multiple simultaneous task threads across channels
-- **State Isolation**: Each task thread maintains independent state and context
+### Database Architecture
+- **Migration-Based Schema**: Version-controlled database changes
+- **Type Safety**: Database schema matches TypeScript types
+- **State Persistence**: All important state stored in database
+- **Automatic Cleanup**: Inactive threads cleaned up periodically
 
-## Development Patterns
+### Development Preferences
+- **TypeScript-First**: Comprehensive type coverage for reliability
+- **Modular Design**: Independent components for easy testing
+- **Error Resilience**: Robust error handling at every level
+- **Configuration-Driven**: Environment-based configuration
 
-- TypeScript-first development for type safety
-- Async/await for Discord API interactions
-- Error handling and logging for debugging
-- Configuration-driven behavior for different servers
+## Integration Patterns
+
+### AI Integration
+- **OpenRouter Provider**: Flexible model selection with fallbacks
+- **Function Calling**: OpenAI-compatible tool execution
+- **Context Management**: Rich message history for AI processing
+- **Conversation State**: Maintained throughout processing loops
+
+### Discord Integration
+- **Event Handling**: Comprehensive Discord event processing
+- **Permission System**: Automatic permission validation
+- **Rate Limiting**: Built-in rate limit handling
+- **Error Recovery**: Graceful handling of API failures
+
+## Security Considerations
+
+- **Environment Variables**: Sensitive data stored in .env files
+- **Permission Validation**: Bot permissions checked before tool execution
+- **Input Sanitization**: All user input validated and sanitized
+- **Audit Logging**: Complete trail of bot actions and decisions

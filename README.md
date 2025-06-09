@@ -1,29 +1,32 @@
 # Ery - AI-Powered Discord Moderation Bot
 
-Ery is an intelligent Discord bot designed to act as a server moderator using a unique task thread system. It processes messages with context awareness and executes moderation actions through a comprehensive tool system.
+Ery is an intelligent Discord bot that uses AI to moderate Discord servers through a unique task thread system. It processes messages with full context awareness and executes actions through a comprehensive Discord API tool system.
 
 ## Features
 
-- **Task Thread System**: One active thread per channel with parallel processing across channels
-- **Context-Aware Processing**: Analyzes recent message history for intelligent decision-making
-- **Comprehensive Tool Suite**: Full Discord API integration for moderation and interaction
-- **Persistent Storage**: SQLite database for configuration and audit logs
-- **Modular Architecture**: Separate modules for moderation, community, and interaction features
+- **AI-Powered Processing**: Uses OpenRouter for intelligent decision-making and response generation
+- **Task Thread System**: One active thread per channel with parallel processing across multiple channels
+- **Context-Aware Analysis**: Analyzes recent message history with full user and bot conversation context
+- **Tool-Based Actions**: Comprehensive Discord API tools for moderation, communication, and server management
+- **Loop-Based Processing**: AI processes context until all necessary tools are executed
+- **Persistent Storage**: SQLite database with automated migrations for state and audit logs
 
 ## Tech Stack
 
-- **Runtime**: Bun (fast JavaScript runtime)
+- **Runtime**: Bun (fast JavaScript runtime with built-in SQLite)
 - **Language**: TypeScript
-- **Discord Library**: discord.js v14
-- **Database**: SQLite with Drizzle ORM
+- **Discord Library**: discord.js v14 with discord-api-types
+- **AI Integration**: OpenRouter API with OpenAI-compatible function calling
+- **Database**: SQLite with Drizzle ORM and automated migrations
 - **Deployment**: Docker + fly.io (planned)
 
 ## Quick Start
 
 ### Prerequisites
 
-- Bun v1.2.15+ installed
+- Bun v1.0+ installed
 - Discord bot token (create at https://discord.com/developers/applications)
+- OpenRouter API key (get at https://openrouter.ai)
 
 ### Installation
 
@@ -41,16 +44,10 @@ bun install
 3. Set up environment:
 ```bash
 cp .env.example .env
-# Edit .env and add your DISCORD_BOT_TOKEN
+# Edit .env and add your DISCORD_BOT_TOKEN and OPENROUTER_API_KEY
 ```
 
 4. Run the bot:
-```bash
-chmod +x test-bot.sh
-./test-bot.sh
-```
-
-Or directly with:
 ```bash
 bun run src/index.ts
 ```
@@ -60,64 +57,91 @@ bun run src/index.ts
 ```
 ery/
 ├── src/
-│   ├── bot/           # Discord client setup
-│   ├── config/        # Configuration management
-│   ├── database/      # Database schema and connection
-│   ├── events/        # Discord event handlers
-│   ├── taskThreads/   # Task thread system
-│   ├── utils/         # Utility functions
-│   └── index.ts       # Main entry point
-├── memory-bank/       # Project documentation
-├── data/              # SQLite database (auto-created)
-└── test-bot.sh        # Test script
+│   ├── ai/              # AI integration (OpenRouter, Agent)
+│   ├── bot/             # Discord client setup
+│   ├── config/          # Configuration management
+│   ├── database/        # Database schema, migrations, connection
+│   ├── events/          # Discord event handlers
+│   ├── taskThreads/     # Task thread system and message processing
+│   ├── tools/           # Discord API tools (communication, moderation, information)
+│   ├── utils/           # Utility functions and logger
+│   └── index.ts         # Main entry point
+├── memory-bank/         # Project documentation and context
+└── test-bot.sh          # Development test script
 ```
 
 ## Current Status
 
-The bot currently:
-- ✅ Connects to Discord
-- ✅ Creates task threads for each message
-- ✅ Fetches message context (last 20 messages within 30 minutes)
-- ✅ Manages thread lifecycle with automatic cleanup
-- ❌ Processes threads with AI (not yet implemented)
-- ❌ Executes moderation tools (not yet implemented)
+**Fully Functional AI-Powered Discord Bot** - 75% Complete
+
+### What Works ✅
+- **Complete Discord Integration**: Bot connects and processes all messages
+- **AI Processing**: Full OpenRouter integration with loop-based tool execution
+- **Task Thread System**: Message batching, context management, and lifecycle handling
+- **Tool Execution**: SendMessage, BanMember, and FetchMessages tools implemented
+- **Database System**: SQLite with automated migrations and type safety
+- **Event Handling**: Comprehensive Discord event processing with graceful shutdown
+
+### Available Tools
+- **SendMessageTool**: Send messages with reply targeting by message ID
+- **BanMemberTool**: Ban users with reason and duration options  
+- **FetchMessagesTool**: Retrieve message history with filtering options
+
+### What's Next ❌
+- **Extended Tool Library**: Kick, mute, role management, message deletion tools
+- **Server Configuration**: Per-server rules and customization system
+- **Advanced Features**: Community activities, analytics, and learning systems
+- **Production Deployment**: Docker containerization and cloud deployment
+
+## How It Works
+
+### Task Thread Flow
+1. **Message Reception**: Discord message triggers task thread creation
+2. **Context Building**: Recent message history (including bot messages) collected with metadata
+3. **AI Processing**: OpenRouter AI analyzes context and determines appropriate actions
+4. **Tool Execution**: AI executes Discord tools in a processing loop until completion
+5. **Response Generation**: AI communicates through send_message tool only
+6. **State Persistence**: All thread state and results saved to database
+
+### Message Processing
+- **Intelligent Batching**: Messages batched by count (5), time (30s), or bot mentions
+- **Channel Isolation**: One active task thread per channel prevents conflicts
+- **Context Rich**: AI receives full conversation history with message IDs for precise targeting
+- **Parallel Processing**: Multiple channels can have active threads simultaneously
+
+## Configuration
+
+Key environment variables:
+```bash
+DISCORD_BOT_TOKEN=your_discord_bot_token
+OPENROUTER_API_KEY=your_openrouter_api_key
+LOG_LEVEL=info
+NODE_ENV=development
+```
 
 ## Development
 
-### Database Schema
+### Database Operations
+```bash
+bun run db:generate    # Generate new migrations
+bun run db:migrate     # Apply pending migrations
+```
 
-The bot uses SQLite with the following main tables:
-- `task_threads`: Active thread management
-- `tool_executions`: Audit log of all tool usage
-- `servers`: Server-specific configuration
-- `users`: User data and preferences
-- `moderation_logs`: Moderation action history
-
-### Task Thread Flow
-
-1. Message received in Discord channel
-2. Check if channel has active thread
-3. Create new thread or use existing
-4. Fetch recent message context
-5. Process with AI agent (TODO)
-6. Execute appropriate tools (TODO)
-7. Complete thread with results
-
-### Configuration
-
-Key configuration options in `src/config/index.ts`:
-- `contextMessageLimit`: Number of messages to include (default: 20)
-- `contextTimeframeMinutes`: Time window for messages (default: 30)
-- `threadTimeoutMs`: Thread inactivity timeout (default: 5 minutes)
-- `maxActiveThreadsPerGuild`: Concurrent thread limit (default: 10)
+### Adding New Tools
+1. Create tool class in `src/tools/discord/[category]/`
+2. Extend the base `Tool` class
+3. Implement required methods with proper validation
+4. Export from appropriate index file for auto-discovery
 
 ## Contributing
 
-This project uses a memory bank system for documentation. Key files:
-- `memory-bank/projectbrief.md`: Project overview
-- `memory-bank/systemPatterns.md`: Architecture patterns
-- `memory-bank/progress.md`: Current progress
-- `memory-bank/activeContext.md`: Active development context
+This project uses a comprehensive memory bank system for documentation:
+- `memory-bank/projectbrief.md`: Project overview and goals
+- `memory-bank/productContext.md`: Product vision and user experience
+- `memory-bank/systemPatterns.md`: Architecture patterns and design decisions
+- `memory-bank/techContext.md`: Technical stack and development setup
+- `memory-bank/activeContext.md`: Current development focus and next steps
+- `memory-bank/progress.md`: Project status and completed features
 
 ## License
 
