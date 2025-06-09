@@ -1,1 +1,0 @@
-ALTER TABLE `task_threads` DROP COLUMN `trigger_message_id`;

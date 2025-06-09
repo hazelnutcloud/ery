@@ -1,30 +1,13 @@
-import { Database } from 'bun:sqlite';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from './schema';
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
-import path from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { migrate } from 'drizzle-orm/neon-http/migrator';
 
-// Get database path from environment or use default
-const dbPath = process.env.DATABASE_PATH || './data/ery.db';
-const dbDir = path.dirname(dbPath);
-
-// Ensure data directory exists
-if (!existsSync(dbDir)) {
-  mkdirSync(dbDir, { recursive: true });
-}
-
-// Create SQLite database instance
-export const sqlite = new Database(dbPath);
-
-// Enable foreign keys
-sqlite.run('PRAGMA foreign_keys = ON');
-
-// Enable WAL mode for better concurrency
-sqlite.run('PRAGMA journal_mode = WAL');
+// Create Neon database instance
+const sql = neon(process.env.DATABASE_URL!);
 
 // Create drizzle instance
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(sql, { schema });
 
 // Database initialization function
 export async function initializeDatabase() {
@@ -33,7 +16,7 @@ export async function initializeDatabase() {
     
     // Run migrations to create/update tables
     console.log('Running database migrations...');
-    migrate(db, { migrationsFolder: './src/database/migrations' });
+    await migrate(db, { migrationsFolder: './src/database/migrations' });
     
     console.log('Database initialized successfully');
   } catch (error) {
@@ -42,8 +25,7 @@ export async function initializeDatabase() {
   }
 }
 
-// Graceful shutdown
+// Graceful shutdown (no-op for serverless)
 export function closeDatabase() {
-  sqlite.close();
-  console.log('Database connection closed');
+  console.log('Database connection closed (serverless)');
 }

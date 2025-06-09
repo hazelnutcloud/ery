@@ -1,21 +1,18 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
-import { sql } from "drizzle-orm";
+import { pgTable, uuid, text, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import type { MessageBatch } from "../../taskThreads/types";
 import type { TaskThreadResult } from "../types";
 
-export const taskThreads = sqliteTable(
+export const taskThreads = pgTable(
   "task_threads",
   {
-    id: text("id").primaryKey(), // UUID
+    id: uuid("id").primaryKey().defaultRandom(), // UUID
     channelId: text("channel_id").notNull(),
     guildId: text("guild_id").notNull(),
     status: text("status").notNull().default("active"), // active, completed, failed
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`(unixepoch())`),
-    completedAt: integer("completed_at", { mode: "timestamp" }),
-    context: text("context", { mode: "json" }).$type<MessageBatch>().notNull(), // Message history and metadata
-    result: text("result", { mode: "json" }).$type<TaskThreadResult>(), // Task execution result
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    context: jsonb("context").$type<MessageBatch>().notNull(), // Message history and metadata
+    result: jsonb("result").$type<TaskThreadResult>(), // Task execution result
     error: text("error"), // Error message if failed
   },
   (table) => [

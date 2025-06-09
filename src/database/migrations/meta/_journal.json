@@ -1,33 +1,12 @@
 {
   "version": "7",
-  "dialect": "sqlite",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "6",
-      "when": 1749191882745,
-      "tag": "0000_secret_pepper_potts",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1749432464916,
-      "tag": "0001_oval_tomorrow_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1749456028590,
-      "tag": "0002_eminent_wendell_vaughn",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1749458324530,
-      "tag": "0003_mighty_warbird",
+      "version": "7",
+      "when": 1749482336778,
+      "tag": "0000_fair_master_mold",
       "breakpoints": true
     }
   ]

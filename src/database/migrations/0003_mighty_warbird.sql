@@ -1,1 +1,0 @@
-ALTER TABLE `info_documents` ADD `description` text NOT NULL;

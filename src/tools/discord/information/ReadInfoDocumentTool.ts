@@ -43,7 +43,7 @@ export class ReadInfoDocumentTool extends AgentTool {
       const documentName = parameters.name as string;
 
       // Fetch the specific document
-      const document = db
+      const [document] = await db
         .select()
         .from(infoDocuments)
         .where(
@@ -51,8 +51,7 @@ export class ReadInfoDocumentTool extends AgentTool {
             eq(infoDocuments.guildId, context.guild.id),
             eq(infoDocuments.name, documentName)
           )
-        )
-        .get();
+        );
 
       if (!document) {
         return {

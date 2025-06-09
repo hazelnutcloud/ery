@@ -29,7 +29,7 @@
 
 ### Core Infrastructure
 - ✅ **Project Foundation**: Bun/TypeScript project with proper configuration
-- ✅ **Database System**: SQLite with Drizzle ORM and automated migrations
+- ✅ **Database System**: Neon Postgres with Drizzle ORM and automated migrations
 - ✅ **Discord Integration**: Bot client with all required intents and event handling
 - ✅ **Configuration**: Environment-based config with validation
 - ✅ **Logging**: Colored logger with configurable levels

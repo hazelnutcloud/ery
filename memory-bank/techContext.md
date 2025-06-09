@@ -15,9 +15,11 @@
 - **openai**: AI integration (compatible with OpenRouter)
 
 ### Database
-- **SQLite**: Lightweight, file-based database using Bun's built-in library
+- **Neon Postgres**: Scalable, serverless PostgreSQL database
 - **Drizzle ORM**: Type-safe operations with automatic migrations
 - **Schema Management**: Version-controlled database changes
+- **UUIDs**: Native PostgreSQL UUIDs for primary keys
+- **JSONB**: Efficient storage and querying of JSON data
 
 ### Deployment
 - **Docker**: Containerized deployment for consistency
@@ -64,7 +66,7 @@ ery/
 ## Technical Constraints
 
 ### Performance Limitations
-- **SQLite Concurrency**: Limited concurrent write operations
+- **PostgreSQL Concurrency**: Improved concurrent write operations
 - **Memory Usage**: Each task thread consumes memory for context
 - **Context Size**: AI processing limited by token windows
 - **Rate Limiting**: Discord API rate limits handled by discord.js
