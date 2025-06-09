@@ -40,30 +40,30 @@ export class MessageBatcher extends EventEmitter {
     queue.messages.push(message);
     queue.lastMessageAt = new Date();
 
-    // Check for bot mention first (immediate trigger)
-    const botMentioned = this.isBotMentioned(message);
-    if (botMentioned) {
-      logger.debug(
-        `Bot mentioned in message ${message.id}, triggering batch`
-      );
-      await this.processBatch(channelId, "bot_mention");
-      return;
-    }
-
     // Check for reply messages (immediate trigger for bot replies, enhanced context for all)
     const replyInfo = await this.isReplyMessage(message);
     if (replyInfo.isReply && replyInfo.replyChain.length > 0) {
       // Add reply chain messages to batch if not already present
       this.addReplyChainToBatch(queue, replyInfo.replyChain);
-      
+
       if (replyInfo.isBotReply) {
-        logger.debug(`Reply to bot message detected in ${message.id}, triggering batch`);
+        logger.debug(
+          `Reply to bot message detected in ${message.id}, triggering batch`
+        );
         await this.processBatch(channelId, "reply_to_bot");
         return;
       }
-      
+
       // For non-bot replies, we've added context but continue with normal batching
       logger.debug(`Reply chain added to context for message ${message.id}`);
+    }
+
+    // Check for bot mention (immediate trigger)
+    const botMentioned = this.isBotMentioned(message);
+    if (botMentioned) {
+      logger.debug(`Bot mentioned in message ${message.id}, triggering batch`);
+      await this.processBatch(channelId, "bot_mention");
+      return;
     }
 
     // Check if we've reached the message count threshold
@@ -202,57 +202,73 @@ export class MessageBatcher extends EventEmitter {
     const processedIds = new Set<string>();
     const maxDepth = config.taskThread.maxReplyChainDepth;
     const timeLimit = Date.now() - config.taskThread.replyChainTimeLimit;
-    
+
     let currentMessage = message;
     let depth = 0;
-    
+
     while (currentMessage.reference?.messageId && depth < maxDepth) {
-      if (!currentMessage.reference || processedIds.has(currentMessage.reference.messageId)) break;
-      
+      if (
+        !currentMessage.reference ||
+        processedIds.has(currentMessage.reference.messageId)
+      )
+        break;
+
       try {
-        const referencedMessage = await currentMessage.channel.messages.fetch(currentMessage.reference.messageId);
-        
+        const referencedMessage = await currentMessage.channel.messages.fetch(
+          currentMessage.reference.messageId
+        );
+
         if (referencedMessage.createdTimestamp < timeLimit) break;
-        
+
         replyChain.unshift(referencedMessage);
         processedIds.add(referencedMessage.id);
         currentMessage = referencedMessage;
         depth++;
-        
       } catch (error) {
-        logger.debug(`Could not fetch referenced message ${currentMessage.reference?.messageId}: ${error}`);
+        logger.debug(
+          `Could not fetch referenced message ${currentMessage.reference?.messageId}: ${error}`
+        );
         break;
       }
     }
-    
+
     return replyChain;
   }
 
-  private async isReplyMessage(message: Message): Promise<{ isReply: boolean; isBotReply: boolean; replyChain: Message[] }> {
+  private async isReplyMessage(
+    message: Message
+  ): Promise<{ isReply: boolean; isBotReply: boolean; replyChain: Message[] }> {
     if (!message.reference?.messageId) {
       return { isReply: false, isBotReply: false, replyChain: [] };
     }
-    
+
     const replyChain = await this.resolveReplyChain(message);
-    
-    const isBotReply = replyChain.some(msg => msg.author.id === client.user?.id);
-    
+
+    const isBotReply = replyChain.some(
+      (msg) => msg.author.id === client.user?.id
+    );
+
     return {
       isReply: true,
       isBotReply,
-      replyChain
+      replyChain,
     };
   }
 
-  private addReplyChainToBatch(queue: MessageQueue, replyChain: Message[]): void {
-    const existingIds = new Set(queue.messages.map(m => m.id));
-    
+  private addReplyChainToBatch(
+    queue: MessageQueue,
+    replyChain: Message[]
+  ): void {
+    const existingIds = new Set(queue.messages.map((m) => m.id));
+    const lastMessage = queue.messages[queue.messages.length - 1]!;
+
     for (const replyMessage of replyChain) {
       if (!existingIds.has(replyMessage.id)) {
-        queue.messages.push(replyMessage);
+        queue.messages[queue.messages.length - 1] = replyMessage;
+        queue.messages.push(lastMessage); // Ensure last message is preserved
       }
     }
-    
+
     queue.messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
   }
 
@@ -274,28 +290,5 @@ export class MessageBatcher extends EventEmitter {
         clearTimeout(queue.timeoutId);
       }
     }
-  }
-
-  /**
-   * Get statistics about current queues
-   */
-  getQueueStats(): {
-    totalQueues: number;
-    totalMessages: number;
-    queuesByChannel: Record<string, number>;
-  } {
-    const queuesByChannel: Record<string, number> = {};
-    let totalMessages = 0;
-
-    for (const [channelId, queue] of this.queues.entries()) {
-      queuesByChannel[channelId] = queue.messages.length;
-      totalMessages += queue.messages.length;
-    }
-
-    return {
-      totalQueues: this.queues.size,
-      totalMessages,
-      queuesByChannel,
-    };
   }
 }
