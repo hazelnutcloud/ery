@@ -15,6 +15,7 @@
 - **AI Integration**: Loop-based agent that processes context, executes tools, and generates responses
 - **Tool System**: Comprehensive Discord API tools with permission checking and validation
 - **Database Schema**: Full SQLite schema with Drizzle ORM and migration system
+- **Agent Logging System**: Implemented comprehensive logging for agent activity, including tool executions, AI responses, and agent lifecycle events.
 
 ### Message Processing Improvements
 - **Message Batching**: Intelligent batching with count, time, and mention triggers
@@ -38,6 +39,7 @@
 - Advanced moderation features and community activities
 - Web dashboard for monitoring and configuration
 - Production deployment setup
+- Advanced logging features (e.g., log retention policies, detailed query interface)
 
 ## Next Steps
 
@@ -46,6 +48,7 @@
 3. **Testing**: Real Discord server testing with bot token and API keys
 4. **Advanced Features**: Community activities, analytics, and learning systems
 5. **Deployment**: Docker containerization and cloud deployment
+6. **Logging Enhancements**: Implement advanced logging features like log retention and a detailed query interface.
 
 ## Active Decisions and Considerations
 
