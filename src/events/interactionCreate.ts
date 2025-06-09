@@ -1,4 +1,4 @@
-import type { Interaction } from 'discord.js';
+import { MessageFlags, type Interaction } from 'discord.js';
 import { logger } from '../utils/logger';
 import { handleInfoDocumentCommands } from '../commands/infoDocuments';
 
@@ -16,7 +16,7 @@ export async function handleInteractionCreate(interaction: Interaction) {
       default:
         await interaction.reply({
           content: 'Unknown command!',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
     }
   } catch (error) {
@@ -27,12 +27,12 @@ export async function handleInteractionCreate(interaction: Interaction) {
     if (interaction.isChatInputCommand() && (interaction.replied || interaction.deferred)) {
       await interaction.followUp({
         content: errorMessage,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } else if (interaction.isChatInputCommand()) {
       await interaction.reply({
         content: errorMessage,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   }

@@ -103,7 +103,7 @@ export class DeleteMessageTool extends AgentTool {
           reason,
           deletedBy: 'Agent',
           deletedAt: new Date().toISOString(),
-          batchId: context.batchInfo.id,
+          threadId: context.threadId,
         },
         message: `Successfully deleted message from ${messageInfo.author.tag}`,
       };

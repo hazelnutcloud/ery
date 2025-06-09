@@ -161,7 +161,7 @@ export class GetMemberInfoTool extends AgentTool {
         },
       };
 
-      logger.info(`Member info retrieved for ${user.tag} (${userId}) by agent (batch: ${context.batchInfo.id})`);
+      logger.info(`Member info retrieved for ${user.tag} (${userId}) by agent (thread: ${context.threadId})`);
 
       return {
         success: true,

@@ -6,7 +6,6 @@ export type ToolStatus = 'pending' | 'success' | 'failed';
 export type BatchTrigger = 'message_count' | 'time_window' | 'bot_mention';
 
 export interface MessageBatch {
-  id: string;
   channelId: string;
   guildId: string;
   messages: Message[];
@@ -16,7 +15,6 @@ export interface MessageBatch {
 
 export interface TaskThread {
   id: string;
-  batchId: string;
   channelId: string;
   guildId: string;
   status: TaskThreadStatus;

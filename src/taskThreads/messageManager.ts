@@ -61,7 +61,7 @@ export class MessageManager {
    */
   private async handleBatchReady(batch: MessageBatch): Promise<void> {
     try {
-      logger.debug(`Handling batch ready event for batch ${batch.id}`);
+      logger.debug(`Handling batch ready event for channel ${batch.channelId}`);
 
       // Check if guild has reached thread limit first
       if (batch.messages[0]?.guild) {
@@ -81,11 +81,11 @@ export class MessageManager {
       const thread = await this.taskThreadManager.spawnThread(batch);
 
       logger.debug(
-        `Successfully spawned thread ${thread.id} for batch ${batch.id}`
+        `Successfully spawned thread ${thread.id} for channel ${batch.channelId}`
       );
     } catch (error) {
       logger.error(
-        `Failed to handle batch ready event for batch ${batch.id}:`,
+        `Failed to handle batch ready event for channel ${batch.channelId}:`,
         error
       );
       // Don't throw here to avoid breaking the event flow

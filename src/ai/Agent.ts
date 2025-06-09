@@ -33,14 +33,19 @@ export class Agent {
 
   constructor() {
     this.aiProvider = new OpenRouterProvider();
-    this.systemPrompt = this.buildSystemPrompt();
+    this.systemPrompt = this.buildSystemPrompt(); // Fixed: Added 'this.'
   }
 
   /**
    * Process a message batch using loop-based approach
    */
-  async processMessage(batch: MessageBatch): Promise<AgentResponse> {
-    logger.info(`Agent processing batch for channel ${batch.channelId}`);
+  async processThread(
+    threadId: string,
+    batch: MessageBatch
+  ): Promise<TaskThreadResult> {
+    logger.info(
+      `Agent processing thread ${threadId} for channel ${batch.channelId}`
+    );
 
     const maxIterations = 10;
     const maxProcessingTime = 30000; // 30 seconds
@@ -48,256 +53,206 @@ export class Agent {
 
     // Log agent start
     await agentLogger.logAgentStart(
-      batch.id,
+      threadId,
       batch.channelId,
       batch.guildId,
       batch.messages[0]?.author?.id // Assuming the first message author is the trigger
     );
+
+    let agentResponse: AgentResponse;
 
     try {
       // Check if AI provider is ready
       if (!this.aiProvider.isReady()) {
         const error =
           "AI provider not configured. Please check your OpenRouter API key.";
-        await agentLogger.logAgentComplete(
-          batch.id,
-          batch.channelId,
-          batch.guildId,
-          false,
-          Date.now() - startTime,
-          error
-        );
-        return {
+        agentResponse = {
           success: false,
           error,
           toolExecutions: [],
           loopIterations: 0,
           conversationMessages: 0,
         };
-      }
-
-      // Use the last message in the batch for tool context
-      const contextMessage = batch.messages[batch.messages.length - 1];
-      if (!contextMessage) {
-        const error = "No messages available in batch for processing";
-        await agentLogger.logAgentComplete(
-          batch.id,
-          batch.channelId,
-          batch.guildId,
-          false,
-          Date.now() - startTime,
-          error
-        );
-        return {
-          success: false,
-          error,
-          toolExecutions: [],
-          loopIterations: 0,
-          conversationMessages: 0,
-        };
-      }
-
-      if (contextMessage.channel.isVoiceBased()) {
-        const error = "Voice channels are not supported for agent processing";
-        await agentLogger.logAgentComplete(
-          batch.id,
-          batch.channelId,
-          batch.guildId,
-          false,
-          Date.now() - startTime,
-          error
-        );
-        return {
-          success: false,
-          error,
-          toolExecutions: [],
-          loopIterations: 0,
-          conversationMessages: 0,
-        };
-      }
-
-      // Create agent execution context from the context message
-      const agentContext = toolExecutor.createAgentExecutionContext(
-        batch,
-        contextMessage.channel,
-        contextMessage.guild ?? undefined
-      );
-
-      // Get available tools for this context
-      const availableTools =
-        await toolExecutor.getAvailableAgentFunctionSchemas(agentContext);
-
-      // Build initial conversation
-      let conversation = this.aiProvider.buildInitialConversation(
-        batch,
-        this.systemPrompt
-      );
-      const allToolExecutions: ToolExecutionResult[] = [];
-      let totalUsage = {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-      };
-
-      // Main processing loop
-      let iteration = 0;
-      while (iteration < maxIterations) {
-        // Check timeout
-        if (Date.now() - startTime > maxProcessingTime) {
-          logger.warn(`Agent processing timeout after ${maxProcessingTime}ms`);
-          break;
-        }
-
-        iteration++;
-        logger.debug(`Agent loop iteration ${iteration}`);
-
-        let aiResponse: AIResponse;
-
-        if (iteration === 1) {
-          // First iteration: use processContext
-          const processingContext: ProcessingContext = {
-            batch,
-            availableTools,
-            systemPrompt: this.systemPrompt,
-            conversationHistory: conversation,
+      } else {
+        // Use the last message in the batch for tool context
+        const contextMessage = batch.messages[batch.messages.length - 1];
+        if (!contextMessage) {
+          const error = "No messages available in batch for processing";
+          agentResponse = {
+            success: false,
+            error,
+            toolExecutions: [],
+            loopIterations: 0,
+            conversationMessages: 0,
           };
-          aiResponse = await this.aiProvider.processContext(processingContext);
+        } else if (contextMessage.channel.isVoiceBased()) {
+          const error = "Voice channels are not supported for agent processing";
+          agentResponse = {
+            success: false,
+            error,
+            toolExecutions: [],
+            loopIterations: 0,
+            conversationMessages: 0,
+          };
         } else {
-          // Subsequent iterations: use continueConversation
-          aiResponse = await this.aiProvider.continueConversation(
-            conversation,
-            availableTools
+          // Create agent execution context from the context message
+          const agentContext = toolExecutor.createAgentExecutionContext(
+            batch,
+            contextMessage.channel,
+            contextMessage.guild ?? undefined
           );
-        }
 
-        // Log AI response
-        if (aiResponse.usage) {
-          totalUsage.promptTokens += aiResponse.usage.promptTokens;
-          totalUsage.completionTokens += aiResponse.usage.completionTokens;
-          totalUsage.totalTokens += aiResponse.usage.totalTokens;
-          await agentLogger.logAIResponse(
-            batch.id,
-            batch.channelId,
-            batch.guildId,
-            aiResponse.model,
-            aiResponse.usage
+          // Get available tools for this context
+          const availableTools =
+            await toolExecutor.getAvailableAgentFunctionSchemas(agentContext);
+
+          // Build initial conversation
+          let conversation = this.aiProvider.buildInitialConversation(
+            batch,
+            this.systemPrompt
           );
-        }
+          const allToolExecutions: ToolExecutionResult[] = [];
+          let totalUsage = {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+          };
 
-        // If no tool calls, we're done
-        if (!aiResponse.toolCalls || aiResponse.toolCalls.length === 0) {
-          logger.debug(`No tool calls in iteration ${iteration}, ending loop`);
-          break;
-        }
+          // Main processing loop
+          let iteration = 0;
+          while (iteration < maxIterations) {
+            // Check timeout
+            if (Date.now() - startTime > maxProcessingTime) {
+              logger.warn(
+                `Agent processing timeout after ${maxProcessingTime}ms`
+              );
+              break;
+            }
 
-        // Execute tool calls
-        logger.debug(
-          `Executing ${aiResponse.toolCalls.length} tool calls in iteration ${iteration}`
-        );
-        const iterationToolExecutions: ToolExecutionResult[] = [];
+            iteration++;
+            logger.debug(`Agent loop iteration ${iteration}`);
 
-        for (const toolCall of aiResponse.toolCalls) {
-          try {
-            // Parse tool arguments
-            const parameters = JSON.parse(toolCall.function.arguments);
+            let aiResponse: AIResponse;
 
-            // Execute the tool
-            const execution = await toolExecutor.executeAgentTool({
-              toolName: toolCall.function.name,
-              parameters,
-              context: agentContext,
-              threadId: batch.id,
-            });
+            if (iteration === 1) {
+              // First iteration: use processContext
+              const processingContext: ProcessingContext = {
+                batch,
+                availableTools,
+                systemPrompt: this.systemPrompt,
+                conversationHistory: conversation,
+              };
+              aiResponse = await this.aiProvider.processContext(
+                processingContext
+              );
+            } else {
+              // Subsequent iterations: use continueConversation
+              aiResponse = await this.aiProvider.continueConversation(
+                conversation,
+                availableTools
+              );
+            }
 
-            iterationToolExecutions.push(execution);
-            allToolExecutions.push(execution);
+            // Log AI response
+            if (aiResponse.usage) {
+              totalUsage.promptTokens += aiResponse.usage.promptTokens;
+              totalUsage.completionTokens += aiResponse.usage.completionTokens;
+              totalUsage.totalTokens += aiResponse.usage.totalTokens;
+              await agentLogger.logAIResponse(
+                threadId,
+                batch.channelId,
+                batch.guildId,
+                aiResponse.model,
+                aiResponse.usage
+              );
+            }
+
+            // If no tool calls, we're done
+            if (!aiResponse.toolCalls || aiResponse.toolCalls.length === 0) {
+              logger.debug(
+                `No tool calls in iteration ${iteration}, ending loop`
+              );
+              break;
+            }
+
+            // Execute tool calls
+            logger.debug(
+              `Executing ${aiResponse.toolCalls.length} tool calls in iteration ${iteration}`
+            );
+            const iterationToolExecutions: ToolExecutionResult[] = [];
+
+            for (const toolCall of aiResponse.toolCalls) {
+              try {
+                // Parse tool arguments
+                const parameters = JSON.parse(toolCall.function.arguments);
+
+                // Execute the tool
+                const execution = await toolExecutor.executeAgentTool({
+                  toolName: toolCall.function.name,
+                  parameters,
+                  context: agentContext,
+                  threadId: threadId,
+                });
+
+                iterationToolExecutions.push(execution);
+                allToolExecutions.push(execution);
+
+                logger.debug(
+                  `Tool ${toolCall.function.name} executed: ${
+                    execution.success ? "success" : "failure"
+                  }`
+                );
+              } catch (error) {
+                logger.error(
+                  `Failed to execute tool ${toolCall.function.name}:`,
+                  error
+                );
+                const errorExecution: ToolExecutionResult = {
+                  executionId: `error-${Date.now()}`,
+                  toolName: toolCall.function.name,
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                  executedAt: new Date(),
+                  executionTimeMs: 0,
+                };
+                iterationToolExecutions.push(errorExecution);
+                allToolExecutions.push(errorExecution);
+              }
+            }
+
+            // Add tool calls and results to conversation
+            conversation = this.aiProvider.addToolCallToConversation(
+              conversation,
+              aiResponse.toolCalls,
+              iterationToolExecutions
+            );
 
             logger.debug(
-              `Tool ${toolCall.function.name} executed: ${
-                execution.success ? "success" : "failure"
-              }`
+              `Iteration ${iteration} completed, conversation now has ${conversation.length} messages`
             );
-          } catch (error) {
-            logger.error(
-              `Failed to execute tool ${toolCall.function.name}:`,
-              error
-            );
-            const errorExecution: ToolExecutionResult = {
-              executionId: `error-${Date.now()}`,
-              toolName: toolCall.function.name,
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-              executedAt: new Date(),
-              executionTimeMs: 0,
-            };
-            iterationToolExecutions.push(errorExecution);
-            allToolExecutions.push(errorExecution);
           }
+
+          if (iteration >= maxIterations) {
+            logger.warn(
+              `Agent processing stopped after reaching max iterations (${maxIterations})`
+            );
+          }
+
+          agentResponse = {
+            success: true,
+            toolExecutions: allToolExecutions,
+            loopIterations: iteration,
+            conversationMessages: conversation.length,
+            usage: totalUsage.totalTokens > 0 ? totalUsage : undefined,
+          };
         }
-
-        // Add tool calls and results to conversation
-        conversation = this.aiProvider.addToolCallToConversation(
-          conversation,
-          aiResponse.toolCalls,
-          iterationToolExecutions
-        );
-
-        logger.debug(
-          `Iteration ${iteration} completed, conversation now has ${conversation.length} messages`
-        );
       }
-
-      if (iteration >= maxIterations) {
-        logger.warn(
-          `Agent processing stopped after reaching max iterations (${maxIterations})`
-        );
-      }
-
-      // Log agent completion
-      await agentLogger.logAgentComplete(
-        batch.id,
-        batch.channelId,
-        batch.guildId,
-        true,
-        Date.now() - startTime,
-        undefined,
-        {
-          loopIterations: iteration,
-          conversationMessages: conversation.length,
-          totalToolExecutions: allToolExecutions.length,
-        }
-      );
-
-      return {
-        success: true,
-        toolExecutions: allToolExecutions,
-        loopIterations: iteration,
-        conversationMessages: conversation.length,
-        usage: totalUsage.totalTokens > 0 ? totalUsage : undefined,
-      };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       logger.error("Agent processing failed:", error);
 
-      // Log agent error
-      await agentLogger.logAgentComplete(
-        batch.id,
-        batch.channelId,
-        batch.guildId,
-        false,
-        Date.now() - startTime,
-        errorMessage
-      );
-      await agentLogger.logError(
-        batch.id,
-        batch.channelId,
-        batch.guildId,
-        errorMessage,
-        { stack: error instanceof Error ? error.stack : undefined }
-      );
-
-      return {
+      agentResponse = {
         success: false,
         error: errorMessage,
         toolExecutions: [],
@@ -305,6 +260,71 @@ export class Agent {
         conversationMessages: 0,
       };
     }
+
+    // Log agent completion
+    await agentLogger.logAgentComplete(
+      threadId,
+      batch.channelId,
+      batch.guildId,
+      agentResponse.success,
+      Date.now() - startTime,
+      agentResponse.error,
+      {
+        loopIterations: agentResponse.loopIterations,
+        conversationMessages: agentResponse.conversationMessages,
+        totalToolExecutions: agentResponse.toolExecutions.length,
+      }
+    );
+
+    if (!agentResponse.success) {
+      await agentLogger.logError(
+        threadId,
+        batch.channelId,
+        batch.guildId,
+        agentResponse.error!,
+        {
+          stack:
+            (agentResponse.error as any) instanceof Error
+              ? (agentResponse.error as any).stack
+              : undefined,
+        } // Fixed: Cast to any
+      );
+    }
+
+    // Generate summary
+    const summary = agentResponse.success
+      ? `Processed ${batch.messages.length} messages with ${agentResponse.toolExecutions.length} tool executions`
+      : `Failed to process batch: ${agentResponse.error}`;
+
+    // Convert tool executions to actions
+    const actions = agentResponse.toolExecutions.map((exec) => ({
+      type: "tool_execution",
+      description: `Execute ${exec.toolName}`,
+      success: exec.success,
+      details: {
+        toolName: exec.toolName,
+        executionId: exec.executionId,
+        result: exec.data,
+        error: exec.error,
+        executionTimeMs: exec.executionTimeMs,
+      },
+    }));
+
+    return {
+      success: agentResponse.success,
+      summary,
+      actions,
+      aiResponse: undefined, // AI no longer provides direct content - must use tools
+      processingTime: Date.now() - startTime,
+      metadata: {
+        usage: agentResponse.usage,
+        error: agentResponse.error,
+        channelId: batch.channelId,
+        messageCount: batch.messages.length,
+        loopIterations: agentResponse.loopIterations,
+        conversationMessages: agentResponse.conversationMessages,
+      },
+    };
   }
 
   /**
@@ -370,50 +390,6 @@ export class Agent {
 - Use send_message for all communication - there are no exceptions
 
 Remember: Your response content is ignored. Only tool calls matter.`;
-  }
-
-  /**
-   * Process a batch and return structured result for database storage
-   */
-  async processTaskThread(batch: MessageBatch): Promise<TaskThreadResult> {
-    const startTime = Date.now();
-    const response = await this.processMessage(batch);
-
-    // Generate summary
-    const summary = response.success
-      ? `Processed ${batch.messages.length} messages with ${response.toolExecutions.length} tool executions`
-      : `Failed to process batch: ${response.error}`;
-
-    // Convert tool executions to actions
-    const actions = response.toolExecutions.map((exec) => ({
-      type: "tool_execution",
-      description: `Execute ${exec.toolName}`,
-      success: exec.success,
-      details: {
-        toolName: exec.toolName,
-        executionId: exec.executionId,
-        result: exec.data,
-        error: exec.error,
-        executionTimeMs: exec.executionTimeMs,
-      },
-    }));
-
-    return {
-      success: response.success,
-      summary,
-      actions,
-      aiResponse: undefined, // AI no longer provides direct content - must use tools
-      processingTime: Date.now() - startTime,
-      metadata: {
-        usage: response.usage,
-        error: response.error,
-        batchId: batch.id,
-        channelId: batch.channelId,
-        messageCount: batch.messages.length,
-        loopIterations: response.loopIterations,
-        conversationMessages: response.conversationMessages,
-      },
-    };
   }
 }
 

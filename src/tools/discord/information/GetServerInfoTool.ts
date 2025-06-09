@@ -158,7 +158,7 @@ export class GetServerInfoTool extends AgentTool {
         },
       };
 
-      logger.info(`Server info retrieved for ${guild.name} by agent (batch: ${context.batchInfo.id})`);
+      logger.info(`Server info retrieved for ${guild.name} by agent (thread: ${context.threadId})`);
 
       return {
         success: true,

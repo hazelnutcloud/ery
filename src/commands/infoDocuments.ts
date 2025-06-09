@@ -1,5 +1,5 @@
 import type { ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
-import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { db } from "../database/connection";
 import { infoDocuments } from "../database/schema";
 import { eq, and } from "drizzle-orm";
@@ -114,7 +114,7 @@ export async function handleInfoDocumentCommands(
     await interaction.reply({
       content:
         "❌ You need Administrator permissions to manage info documents.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -122,7 +122,7 @@ export async function handleInfoDocumentCommands(
   if (!interaction.guildId) {
     await interaction.reply({
       content: "❌ This command can only be used in a server.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -149,7 +149,7 @@ export async function handleInfoDocumentCommands(
     default:
       await interaction.reply({
         content: "❌ Unknown subcommand.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
   }
 }
@@ -162,7 +162,7 @@ async function handleCreate(interaction: ChatInputCommandInteraction) {
 
   try {
     // Check if document already exists
-    const existing = await db
+    const [existing] = await db
       .select()
       .from(infoDocuments)
       .where(
@@ -172,7 +172,7 @@ async function handleCreate(interaction: ChatInputCommandInteraction) {
     if (existing) {
       await interaction.reply({
         content: `❌ A document named "${name}" already exists.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -194,13 +194,13 @@ async function handleCreate(interaction: ChatInputCommandInteraction) {
 
     await interaction.reply({
       content: `✅ Successfully created document "${name}".`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   } catch (error) {
     logger.error("Error creating info document:", error);
     await interaction.reply({
       content: "❌ Failed to create document.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -219,7 +219,7 @@ async function handleCreateFromFile(interaction: ChatInputCommandInteraction) {
     ) {
       await interaction.reply({
         content: "❌ File must be a .md or .txt file.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -228,13 +228,13 @@ async function handleCreateFromFile(interaction: ChatInputCommandInteraction) {
     if (attachment.size > 1024 * 1024) {
       await interaction.reply({
         content: "❌ File must be smaller than 1MB.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
     // Check if document already exists
-    const existing = await db
+    const [existing] = await db
       .select()
       .from(infoDocuments)
       .where(
@@ -243,7 +243,7 @@ async function handleCreateFromFile(interaction: ChatInputCommandInteraction) {
     if (existing) {
       await interaction.reply({
         content: `❌ A document named "${name}" already exists.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -269,13 +269,13 @@ async function handleCreateFromFile(interaction: ChatInputCommandInteraction) {
 
     await interaction.reply({
       content: `✅ Successfully created document "${name}" from uploaded file.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   } catch (error) {
     logger.error("Error creating info document from file:", error);
     await interaction.reply({
       content: "❌ Failed to create document from file.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -294,7 +294,7 @@ async function handleRead(interaction: ChatInputCommandInteraction) {
     if (!document) {
       await interaction.reply({
         content: `❌ Document "${name}" not found.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -319,7 +319,7 @@ async function handleRead(interaction: ChatInputCommandInteraction) {
     logger.error("Error reading info document:", error);
     await interaction.reply({
       content: "❌ Failed to read document.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -339,7 +339,7 @@ async function handleUpdate(interaction: ChatInputCommandInteraction) {
     if (!document) {
       await interaction.reply({
         content: `❌ Document "${name}" not found.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -361,13 +361,13 @@ async function handleUpdate(interaction: ChatInputCommandInteraction) {
 
     await interaction.reply({
       content: `✅ Successfully updated document "${name}".`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   } catch (error) {
     logger.error("Error updating info document:", error);
     await interaction.reply({
       content: "❌ Failed to update document.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -386,7 +386,7 @@ async function handleDelete(interaction: ChatInputCommandInteraction) {
     if (!document) {
       await interaction.reply({
         content: `❌ Document "${name}" not found.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -404,13 +404,13 @@ async function handleDelete(interaction: ChatInputCommandInteraction) {
 
     await interaction.reply({
       content: `✅ Successfully deleted document "${name}".`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   } catch (error) {
     logger.error("Error deleting info document:", error);
     await interaction.reply({
       content: "❌ Failed to delete document.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -433,7 +433,7 @@ async function handleList(interaction: ChatInputCommandInteraction) {
     if (documents.length === 0) {
       await interaction.reply({
         content: "📄 No information documents found in this server.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -463,7 +463,7 @@ async function handleList(interaction: ChatInputCommandInteraction) {
     logger.error("Error listing info documents:", error);
     await interaction.reply({
       content: "❌ Failed to list documents.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral
     });
   }
 }

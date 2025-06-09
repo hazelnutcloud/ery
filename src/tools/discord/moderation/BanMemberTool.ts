@@ -115,7 +115,7 @@ export class BanMemberTool extends AgentTool {
           deleteMessageDays: messageDays,
           bannedBy: 'Agent',
           bannedAt: new Date().toISOString(),
-          batchId: context.batchInfo.id,
+          threadId: context.threadId,
         },
         message: `Successfully banned ${username}`,
       };

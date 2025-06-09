@@ -93,7 +93,6 @@ export class MessageBatcher extends EventEmitter {
 
     // Create batch with current messages
     const batch: MessageBatch = {
-      id: generateId(),
       channelId: queue.channelId,
       guildId: queue.guildId,
       messages: [...queue.messages], // Copy messages
@@ -105,7 +104,7 @@ export class MessageBatcher extends EventEmitter {
     queue.messages = [];
 
     logger.info(
-      `Created message batch ${batch.id} for channel ${channelId} with ${batch.messages.length} messages (trigger: ${triggerType})`
+      `Created message batch for channel ${channelId} with ${batch.messages.length} messages (trigger: ${triggerType})`
     );
 
     // Emit event that batch is ready for processing

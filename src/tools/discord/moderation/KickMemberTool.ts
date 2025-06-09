@@ -102,7 +102,7 @@ export class KickMemberTool extends AgentTool {
           reason,
           kickedBy: 'Agent',
           kickedAt: new Date().toISOString(),
-          batchId: context.batchInfo.id,
+          threadId: context.threadId,
         },
         message: `Successfully kicked ${username}`,
       };

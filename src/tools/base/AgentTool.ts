@@ -15,7 +15,7 @@ import { ChannelType } from "discord.js";
 import type { ChatCompletionTool } from "openai/resources";
 import type { BatchTrigger } from "../../taskThreads/types";
 
-// Agent execution context - represents the environment where the agent operates
+  // Agent execution context - represents the environment where the agent operates
 export interface AgentExecutionContext {
   // Channel where the agent is operating
   channel:
@@ -33,9 +33,11 @@ export interface AgentExecutionContext {
   // The bot's member in the guild (for permission checks)
   botMember?: GuildMember;
 
+  // The ID of the current task thread
+  threadId?: string;
+
   // Batch information for context
   batchInfo: {
-    id: string;
     messageCount: number;
     triggerType: BatchTrigger;
     channelId: string;

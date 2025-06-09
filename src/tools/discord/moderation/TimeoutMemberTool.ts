@@ -136,7 +136,7 @@ export class TimeoutMemberTool extends AgentTool {
           timeoutUntil: timeoutUntil.toISOString(),
           timedOutBy: 'Agent',
           timedOutAt: new Date().toISOString(),
-          batchId: context.batchInfo.id,
+          threadId: context.threadId,
         },
         message: `Successfully timed out ${username} for ${durationText}`,
       };

@@ -150,7 +150,7 @@ export class BulkDeleteMessagesTool extends AgentTool {
           deletedBy: 'Agent',
           deletedAt: new Date().toISOString(),
           channelId: context.channel.id,
-          batchId: context.batchInfo.id,
+          threadId: context.threadId,
         },
         message: `Successfully deleted ${actualDeletedCount} message${actualDeletedCount === 1 ? '' : 's'}${
           messagesToDelete.size > validMessages.size ? 

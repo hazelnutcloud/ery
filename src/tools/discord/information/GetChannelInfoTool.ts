@@ -196,7 +196,7 @@ export class GetChannelInfoTool extends AgentTool {
       }
 
       logger.info(
-        `Channel info retrieved for ${targetChannel.id} by agent (batch: ${context.batchInfo.id})`
+        `Channel info retrieved for ${targetChannel.id} by agent (thread: ${context.threadId})`
       );
 
       return {

@@ -116,8 +116,8 @@ export class SendMessageTool extends AgentTool {
       }
 
       logger.info(
-        `Message sent by agent to channel ${targetChannel.id} (batch: ${
-          context.batchInfo.id
+        `Message sent by agent to channel ${targetChannel.id} (thread: ${
+          context.threadId
         }): ${content.substring(0, 50)}...`
       );
 

@@ -26,7 +26,6 @@ export class TaskThreadManager {
       // Create new thread
       const thread: TaskThread = {
         id: generateId(),
-        batchId: batch.id,
         channelId: batch.channelId,
         guildId: batch.guildId,
         status: "active",
@@ -50,11 +49,11 @@ export class TaskThreadManager {
       this.activeThreads.set(batch.channelId, channelThreads);
 
       logger.info(
-        `Spawned new task thread ${thread.id} for batch ${batch.id} in channel ${batch.channelId} (trigger: ${batch.triggerType})`
+        `Spawned new task thread ${thread.id} for batch in channel ${batch.channelId} (trigger: ${batch.triggerType})`
       );
 
       // Process the thread with AI in the background
-      this.processThreadWithAI(thread).catch((error) => {
+      await this.processThreadWithAI(thread).catch((error) => {
         logger.error(`Failed to process thread ${thread.id} with AI:`, error);
         this.failThread(thread.id, `AI processing failed: ${error.message}`);
       });
@@ -139,7 +138,6 @@ export class TaskThreadManager {
       const batch = dbThread.context;
       return {
         id: dbThread.id,
-        batchId: batch.id,
         channelId: dbThread.channelId,
         guildId: dbThread.guildId,
         status: dbThread.status as TaskThreadStatus,
@@ -223,7 +221,7 @@ export class TaskThreadManager {
       logger.debug(`Processing thread ${thread.id} with AI`);
 
       // Process with AI agent
-      const result = await agent.processTaskThread(thread.batch);
+      const result = await agent.processThread(thread.id, thread.batch);
 
       // Complete the thread with the result
       await this.completeThread(thread.id, result);
@@ -294,7 +292,6 @@ export class TaskThreadManager {
     const batch = dbThread.context;
     return {
       id: dbThread.id,
-      batchId: batch.id,
       channelId: dbThread.channelId,
       guildId: dbThread.guildId,
       status: dbThread.status as TaskThreadStatus,

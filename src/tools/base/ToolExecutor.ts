@@ -38,7 +38,6 @@ export class ToolExecutor {
       guild,
       botMember: guild?.members.me || undefined,
       batchInfo: {
-        id: batch.id,
         messageCount: batch.messages.length,
         triggerType: batch.triggerType,
         channelId: batch.channelId,
