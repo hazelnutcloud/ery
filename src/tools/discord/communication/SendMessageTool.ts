@@ -22,9 +22,9 @@ export class SendMessageTool extends Tool {
           required: false,
         },
         {
-          name: "reply",
-          type: "boolean",
-          description: "Whether to reply to the original message",
+          name: "replyToMessageId",
+          type: "string",
+          description: "ID of the specific message to reply to (optional). If not provided, sends a regular message.",
           required: false,
         },
       ],
@@ -40,7 +40,7 @@ export class SendMessageTool extends Tool {
     parameters: Record<string, any>
   ): Promise<ToolResult> {
     try {
-      const { content, channelId, reply } = parameters;
+      const { content, channelId, replyToMessageId } = parameters;
 
       // Validate content
       if (!content || content.trim().length === 0) {
@@ -81,9 +81,19 @@ export class SendMessageTool extends Tool {
 
       // Send the message
       let sentMessage: Message;
-      if (reply && context.message) {
-        sentMessage = await context.message.reply(content);
+      if (replyToMessageId) {
+        // Fetch the specific message to reply to
+        try {
+          const messageToReplyTo = await targetChannel.messages.fetch(replyToMessageId);
+          sentMessage = await messageToReplyTo.reply(content);
+        } catch (fetchError) {
+          return {
+            success: false,
+            error: `Failed to fetch message with ID ${replyToMessageId}: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`,
+          };
+        }
       } else {
+        // Send regular message
         if (targetChannel.isSendable()) {
           sentMessage = await targetChannel.send(content);
         } else {
@@ -107,6 +117,7 @@ export class SendMessageTool extends Tool {
           messageId: sentMessage.id,
           channelId: sentMessage.channelId,
           content: sentMessage.content,
+          repliedToMessageId: replyToMessageId || null,
         },
         message: `Message sent successfully`,
       };

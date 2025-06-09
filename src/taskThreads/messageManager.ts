@@ -25,18 +25,6 @@ export class MessageManager {
    */
   async addMessage(message: Message): Promise<void> {
     try {
-      // Check if guild has reached thread limit first
-      if (message.guild) {
-        const hasReachedLimit =
-          await this.taskThreadManager.hasReachedThreadLimit(message.guild.id);
-        if (hasReachedLimit) {
-          logger.warn(
-            `Guild ${message.guild.id} has reached task thread limit`
-          );
-          return;
-        }
-      }
-
       // Add message to the batcher
       await this.messageBatcher.addMessage(message);
     } catch (error) {
@@ -74,6 +62,20 @@ export class MessageManager {
   private async handleBatchReady(batch: MessageBatch): Promise<void> {
     try {
       logger.debug(`Handling batch ready event for batch ${batch.id}`);
+
+      // Check if guild has reached thread limit first
+      if (batch.messages[0]?.guild) {
+        const hasReachedLimit =
+          await this.taskThreadManager.hasReachedThreadLimit(
+            batch.messages[0].guild.id
+          );
+        if (hasReachedLimit) {
+          logger.warn(
+            `Guild ${batch.messages[0].guild.id} has reached task thread limit`
+          );
+          return;
+        }
+      }
 
       // Spawn a thread for the batch
       const thread = await this.taskThreadManager.spawnThread(batch);

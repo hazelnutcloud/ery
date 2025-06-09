@@ -106,9 +106,6 @@ export class MessageBatcher extends EventEmitter {
     // Clear the queue for next batch
     queue.messages = [];
 
-    // Remove queue if it's empty (it will be recreated when needed)
-    this.queues.delete(channelId);
-
     logger.info(
       `Created message batch ${batch.id} for channel ${channelId} with ${batch.messages.length} messages (trigger: ${triggerType})`
     );

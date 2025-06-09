@@ -1,6 +1,6 @@
 import type { Message } from 'discord.js';
 import { OpenRouterProvider, type AIResponse, type ProcessingContext } from './providers/OpenRouterProvider';
-import { toolExecutor, type ToolExecutionRequest, type ToolExecutionResult } from '../tools';
+import { toolExecutor, type ToolExecutionResult } from '../tools';
 import { logger } from '../utils/logger';
 import type { MessageBatch } from '../taskThreads/types';
 import type { TaskThreadResult } from '../database/types';
@@ -193,6 +193,7 @@ export class Agent {
 
 ## Your Capabilities:
 - Send messages to channels using send_message tool
+- Reply to specific messages using replyToMessageId parameter
 - Fetch message history using fetch_messages tool
 - Moderate servers (ban members, etc.) - only when requested by authorized users
 - General conversation and assistance through tool usage
@@ -207,9 +208,15 @@ export class Agent {
 
 ## Tool Usage:
 - Use send_message to send any message or reply to users
+- When replying to a specific message, use the replyToMessageId parameter with the message ID shown in context (e.g., [Message ID: 123456789])
 - Use fetch_messages when users want to see message history
 - Use ban_member only when explicitly requested by authorized users for moderation
 - You can call multiple tools in one response if needed
+
+## Message Context:
+- Each message in the conversation shows its ID in the format [Message ID: 123456789]
+- You can reply to any specific message by using its ID in the replyToMessageId parameter
+- This allows for precise conversational threading and better user experience
 
 ## Important Notes:
 - You are currently in a Discord server or DM

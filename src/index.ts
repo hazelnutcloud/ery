@@ -1,6 +1,6 @@
 import { client } from './bot/client';
 import { initializeDatabase, closeDatabase } from './database/connection';
-import { validateConfig } from './config';
+import { config, validateConfig } from './config';
 import { logger } from './utils/logger';
 import { messageManager } from './taskThreads/messageManager';
 import { registerAllTools } from './tools';
@@ -27,7 +27,7 @@ async function main() {
     client.on('messageCreate', handleMessageCreate);
 
     // Login to Discord
-    await client.login(process.env.DISCORD_BOT_TOKEN);
+    await client.login(config.discord.token);
 
   } catch (error) {
     logger.error('Failed to start bot:', error);

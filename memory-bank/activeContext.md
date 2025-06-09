@@ -12,6 +12,10 @@
 
 ## Recent Changes
 
+- **AI Context Building Refactored**: Bot messages are now included in conversation history as "assistant" role messages instead of being filtered out, preserving important context
+- **Message ID Context Integration**: All messages in conversation history now include their Discord message IDs in format [Message ID: 123456789] allowing AI to target specific messages for replies
+- **Send Message Tool Enhanced**: Replaced `reply` boolean parameter with `replyToMessageId` string parameter allowing AI to reply to any specific message by ID instead of only the trigger message
+- **System Prompt Updated**: Enhanced system prompt to inform AI about message ID availability and precise reply targeting capabilities
 - **Dependencies Installed**: discord.js, discord-api-types, drizzle-orm, drizzle-kit (using Bun's native SQLite)
 - **Database Schema Created**: Complete schema for all tables including task threads, tools, users, servers, moderation
 - **Database Connection**: Implemented with Bun SQLite, now uses drizzle-orm migrations

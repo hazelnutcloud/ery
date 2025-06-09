@@ -43,7 +43,9 @@ export class TaskThreadManager {
         createdAt: thread.createdAt,
         context: batch,
         triggerMessageId:
-          batch.triggerMessage?.id || batch.messages[0]?.id || "unknown",
+          batch.triggerMessage?.id ||
+          batch.messages[batch.messages.length - 1]?.id ||
+          "unknown",
       });
 
       // Cache in memory
@@ -226,7 +228,8 @@ export class TaskThreadManager {
 
       // Ensure we have a trigger message
       const triggerMessage =
-        thread.batch.triggerMessage || thread.batch.messages[0];
+        thread.batch.triggerMessage ||
+        thread.batch.messages[thread.batch.messages.length - 1];
       if (!triggerMessage) {
         throw new Error("No trigger message available for AI processing");
       }

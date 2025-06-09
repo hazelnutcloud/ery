@@ -1,6 +1,5 @@
 import OpenAI from "openai";
 import type {
-  ChatCompletionCreateParams,
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
@@ -32,7 +31,7 @@ export interface ProcessingContext {
   batch: MessageBatch;
   availableTools: ChatCompletionTool[];
   systemPrompt: string;
-  conversationHistory?: ChatCompletionMessageParam[];
+  conversationHistory: ChatCompletionMessageParam[];
 }
 
 export class OpenRouterProvider {
@@ -88,7 +87,7 @@ export class OpenRouterProvider {
     }
 
     try {
-      const messages = this.buildMessages(context);
+      const messages = context.conversationHistory;
       const model = this.selectModel(context);
 
       logger.debug(
@@ -221,46 +220,6 @@ export class OpenRouterProvider {
   }
 
   /**
-   * Build messages array for AI processing
-   */
-  private buildMessages(
-    context: ProcessingContext
-  ): ChatCompletionMessageParam[] {
-    // If we have conversation history, use it instead of building from batch
-    if (context.conversationHistory) {
-      return [...context.conversationHistory];
-    }
-
-    const messages: ChatCompletionMessageParam[] = [];
-
-    // Add system prompt
-    messages.push({
-      role: "system",
-      content: context.systemPrompt,
-    });
-
-    // Add message history from batch (in chronological order)
-    const sortedMessages = [...context.batch.messages].sort(
-      (a, b) => a.createdTimestamp - b.createdTimestamp
-    );
-
-    for (const message of sortedMessages) {
-      // Skip bot messages to avoid confusion
-      if (message.author.bot) continue;
-
-      const content = this.formatMessageContent(message);
-      if (content.trim().length === 0) continue;
-
-      messages.push({
-        role: "user",
-        content: `${message.author.username}: ${content}`,
-      });
-    }
-
-    return messages;
-  }
-
-  /**
    * Build initial conversation from message batch
    */
   buildInitialConversation(
@@ -281,16 +240,21 @@ export class OpenRouterProvider {
     );
 
     for (const message of sortedMessages) {
-      // Skip bot messages to avoid confusion
-      if (message.author.bot) continue;
-
       const content = this.formatMessageContent(message);
       if (content.trim().length === 0) continue;
 
-      messages.push({
-        role: "user",
-        content: `${message.author.username}: ${content}`,
-      });
+      // Include bot messages as assistant role, user messages as user role
+      if (message.author.bot) {
+        messages.push({
+          role: "assistant",
+          content: `[Message ID: ${message.id}] ${content}`,
+        });
+      } else {
+        messages.push({
+          role: "user",
+          content: `[Message ID: ${message.id}] ${message.author.username}: ${content}`,
+        });
+      }
     }
 
     return messages;
@@ -323,7 +287,9 @@ export class OpenRouterProvider {
 
     // Add tool result messages
     for (const result of toolResults) {
-      const toolCall = toolCalls.find((call) => call.function.name === result.toolName);
+      const toolCall = toolCalls.find(
+        (call) => call.function.name === result.toolName
+      );
       if (toolCall) {
         updatedConversation.push({
           role: "tool",
@@ -377,9 +343,7 @@ export class OpenRouterProvider {
     // Add reaction information
     if (message.reactions?.cache.size > 0) {
       const reactionInfo = Array.from(message.reactions.cache.values())
-        .map(
-          (reaction) => `${reaction.emoji.toString()}:${reaction.count}`
-        )
+        .map((reaction) => `${reaction.emoji.toString()}:${reaction.count}`)
         .join(" ");
       content += ` [Reactions: ${reactionInfo}]`;
     }
@@ -406,7 +370,7 @@ export class OpenRouterProvider {
     context: ProcessingContext
   ): Promise<AIResponse> {
     try {
-      const messages = this.buildMessages(context);
+      const messages = context.conversationHistory;
 
       const completion = await this.client.chat.completions.create({
         model: config.ai.fallbackModel,
