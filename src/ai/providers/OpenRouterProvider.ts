@@ -5,6 +5,7 @@ import type {
 } from "openai/resources/chat/completions";
 import { config } from "../../config";
 import { logger } from "../../utils/logger";
+import { client } from "../../bot/client";
 import type { MessageBatch } from "../../taskThreads/types";
 import type { Message } from "discord.js";
 import type { ToolExecutionResult } from "../../tools/base/ToolExecutor";
@@ -326,6 +327,44 @@ export class OpenRouterProvider {
    */
   private formatMessageContent(message: Message): string {
     let content = message.content || "";
+
+    // Process user mentions
+    if (message.mentions.users.size > 0) {
+      for (const [userId, user] of message.mentions.users) {
+        const mentionPattern = new RegExp(`<@!?${userId}>`, 'g');
+        const isBotMention = client.user && userId === client.user.id;
+        const replacement = isBotMention 
+          ? `@${user.username} (bot, ID: ${userId})` 
+          : `@${user.username} (ID: ${userId})`;
+        content = content.replace(mentionPattern, replacement);
+      }
+    }
+
+    // Process role mentions
+    if (message.mentions.roles.size > 0) {
+      for (const [roleId, role] of message.mentions.roles) {
+        const mentionPattern = new RegExp(`<@&${roleId}>`, 'g');
+        const replacement = `@${role.name} (Role ID: ${roleId})`;
+        content = content.replace(mentionPattern, replacement);
+      }
+    }
+
+    // Process channel mentions
+    if (message.mentions.channels.size > 0) {
+      for (const [channelId, channel] of message.mentions.channels) {
+        const mentionPattern = new RegExp(`<#${channelId}>`, 'g');
+        let channelName = '';
+        if ('name' in channel && channel.name) {
+          channelName = channel.name;
+        } else if ('recipient' in channel && channel.recipient) {
+          channelName = `@${channel.recipient.username}`; // DM channel
+        } else {
+          channelName = 'Unknown Channel';
+        }
+        const replacement = `#${channelName} (Channel ID: ${channelId})`;
+        content = content.replace(mentionPattern, replacement);
+      }
+    }
 
     // Add attachment information
     if (message.attachments?.size > 0) {
