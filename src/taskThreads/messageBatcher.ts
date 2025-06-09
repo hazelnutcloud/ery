@@ -50,6 +50,22 @@ export class MessageBatcher extends EventEmitter {
       return;
     }
 
+    // Check for reply messages (immediate trigger for bot replies, enhanced context for all)
+    const replyInfo = await this.isReplyMessage(message);
+    if (replyInfo.isReply && replyInfo.replyChain.length > 0) {
+      // Add reply chain messages to batch if not already present
+      this.addReplyChainToBatch(queue, replyInfo.replyChain);
+      
+      if (replyInfo.isBotReply) {
+        logger.debug(`Reply to bot message detected in ${message.id}, triggering batch`);
+        await this.processBatch(channelId, "reply_to_bot");
+        return;
+      }
+      
+      // For non-bot replies, we've added context but continue with normal batching
+      logger.debug(`Reply chain added to context for message ${message.id}`);
+    }
+
     // Check if we've reached the message count threshold
     if (queue.messages.length >= config.taskThread.batchMessageCount) {
       logger.debug(
@@ -179,6 +195,65 @@ export class MessageBatcher extends EventEmitter {
     }
 
     return false;
+  }
+
+  private async resolveReplyChain(message: Message): Promise<Message[]> {
+    const replyChain: Message[] = [];
+    const processedIds = new Set<string>();
+    const maxDepth = config.taskThread.maxReplyChainDepth;
+    const timeLimit = Date.now() - config.taskThread.replyChainTimeLimit;
+    
+    let currentMessage = message;
+    let depth = 0;
+    
+    while (currentMessage.reference?.messageId && depth < maxDepth) {
+      if (!currentMessage.reference || processedIds.has(currentMessage.reference.messageId)) break;
+      
+      try {
+        const referencedMessage = await currentMessage.channel.messages.fetch(currentMessage.reference.messageId);
+        
+        if (referencedMessage.createdTimestamp < timeLimit) break;
+        
+        replyChain.unshift(referencedMessage);
+        processedIds.add(referencedMessage.id);
+        currentMessage = referencedMessage;
+        depth++;
+        
+      } catch (error) {
+        logger.debug(`Could not fetch referenced message ${currentMessage.reference?.messageId}: ${error}`);
+        break;
+      }
+    }
+    
+    return replyChain;
+  }
+
+  private async isReplyMessage(message: Message): Promise<{ isReply: boolean; isBotReply: boolean; replyChain: Message[] }> {
+    if (!message.reference?.messageId) {
+      return { isReply: false, isBotReply: false, replyChain: [] };
+    }
+    
+    const replyChain = await this.resolveReplyChain(message);
+    
+    const isBotReply = replyChain.some(msg => msg.author.id === client.user?.id);
+    
+    return {
+      isReply: true,
+      isBotReply,
+      replyChain
+    };
+  }
+
+  private addReplyChainToBatch(queue: MessageQueue, replyChain: Message[]): void {
+    const existingIds = new Set(queue.messages.map(m => m.id));
+    
+    for (const replyMessage of replyChain) {
+      if (!existingIds.has(replyMessage.id)) {
+        queue.messages.push(replyMessage);
+      }
+    }
+    
+    queue.messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
   }
 
   private startCleanupInterval(): void {

@@ -32,6 +32,8 @@ export const config = {
     batchTimeWindowMs: 30000, // 30 seconds - time window to trigger a batch
     maxQueueAge: 300000, // 5 minutes - max age before queues are cleaned up
     queueCleanupIntervalMs: 60000, // 1 minute interval for queue cleanup
+    maxReplyChainDepth: 5, // Maximum depth to follow reply chains
+    replyChainTimeLimit: 3600000, // 1 hour - don't fetch replies older than this
   },
   
   // AI Configuration

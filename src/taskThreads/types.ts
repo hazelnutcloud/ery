@@ -3,7 +3,7 @@ import type { TaskThreadResult } from '../database/types';
 
 export type TaskThreadStatus = 'active' | 'completed' | 'failed';
 export type ToolStatus = 'pending' | 'success' | 'failed';
-export type BatchTrigger = 'message_count' | 'time_window' | 'bot_mention';
+export type BatchTrigger = 'message_count' | 'time_window' | 'bot_mention' | 'reply_to_bot';
 
 export interface MessageBatch {
   channelId: string;
