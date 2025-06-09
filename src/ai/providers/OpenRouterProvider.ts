@@ -26,6 +26,7 @@ export interface AIResponse {
     completionTokens: number;
     totalTokens: number;
   };
+  model: string; // Add model property
 }
 
 export interface ProcessingContext {
@@ -130,6 +131,7 @@ export class OpenRouterProvider {
               totalTokens: completion.usage.total_tokens,
             }
           : undefined,
+        model: model, // Assign model here
       };
 
       logger.debug(
@@ -205,6 +207,7 @@ export class OpenRouterProvider {
               totalTokens: completion.usage.total_tokens,
             }
           : undefined,
+        model: model, // Assign model here
       };
 
       logger.debug(
@@ -446,6 +449,7 @@ export class OpenRouterProvider {
               totalTokens: completion.usage.total_tokens,
             }
           : undefined,
+        model: config.ai.fallbackModel, // Add model property for fallback
       };
     } catch (error) {
       logger.error("Fallback model also failed:", error);

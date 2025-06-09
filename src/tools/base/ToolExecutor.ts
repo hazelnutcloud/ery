@@ -8,6 +8,7 @@ import { logger } from "../../utils/logger";
 import { generateId } from "../../utils/uuid";
 import type { ChatCompletionTool } from "openai/resources";
 import type { MessageBatch } from "../../taskThreads/types";
+import { agentLogger } from "../../services/AgentLogger";
 
 export interface AgentToolExecutionRequest {
   toolName: string;
@@ -213,17 +214,18 @@ export class ToolExecutor {
     result: ToolResult,
     startTime: number
   ): Promise<void> {
-    try {
-      // TODO: Implement agent tool execution logging
-      // For now, just log to console
-      logger.info(
-        `Agent tool execution logged: ${executionId} - ${request.toolName} - ${
-          result.success ? "SUCCESS" : "FAILURE"
-        }`
-      );
-    } catch (error) {
-      logger.error("Failed to log agent tool execution:", error);
-    }
+    const executionTimeMs = Date.now() - startTime;
+    await agentLogger.logToolExecution(
+      request.threadId!, // threadId is guaranteed to be present when called from Agent.ts
+      request.context.channel.id,
+      request.context.guild?.id || "unknown",
+      request.toolName,
+      request.parameters,
+      { ...result, executionId, toolName: request.toolName, executedAt: new Date(), executionTimeMs },
+      executionTimeMs,
+      result.success,
+      result.error
+    );
   }
 }
 

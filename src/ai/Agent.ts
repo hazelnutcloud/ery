@@ -12,6 +12,7 @@ import {
 import { logger } from "../utils/logger";
 import type { MessageBatch } from "../taskThreads/types";
 import type { TaskThreadResult } from "../database/types";
+import { agentLogger } from "../services/AgentLogger";
 
 export interface AgentResponse {
   success: boolean;
@@ -45,13 +46,30 @@ export class Agent {
     const maxProcessingTime = 30000; // 30 seconds
     const startTime = Date.now();
 
+    // Log agent start
+    await agentLogger.logAgentStart(
+      batch.id,
+      batch.channelId,
+      batch.guildId,
+      batch.messages[0]?.author?.id // Assuming the first message author is the trigger
+    );
+
     try {
       // Check if AI provider is ready
       if (!this.aiProvider.isReady()) {
+        const error =
+          "AI provider not configured. Please check your OpenRouter API key.";
+        await agentLogger.logAgentComplete(
+          batch.id,
+          batch.channelId,
+          batch.guildId,
+          false,
+          Date.now() - startTime,
+          error
+        );
         return {
           success: false,
-          error:
-            "AI provider not configured. Please check your OpenRouter API key.",
+          error,
           toolExecutions: [],
           loopIterations: 0,
           conversationMessages: 0,
@@ -61,9 +79,18 @@ export class Agent {
       // Use the last message in the batch for tool context
       const contextMessage = batch.messages[batch.messages.length - 1];
       if (!contextMessage) {
+        const error = "No messages available in batch for processing";
+        await agentLogger.logAgentComplete(
+          batch.id,
+          batch.channelId,
+          batch.guildId,
+          false,
+          Date.now() - startTime,
+          error
+        );
         return {
           success: false,
-          error: "No messages available in batch for processing",
+          error,
           toolExecutions: [],
           loopIterations: 0,
           conversationMessages: 0,
@@ -71,9 +98,18 @@ export class Agent {
       }
 
       if (contextMessage.channel.isVoiceBased()) {
+        const error = "Voice channels are not supported for agent processing";
+        await agentLogger.logAgentComplete(
+          batch.id,
+          batch.channelId,
+          batch.guildId,
+          false,
+          Date.now() - startTime,
+          error
+        );
         return {
           success: false,
-          error: "Voice channels are not supported for agent processing",
+          error,
           toolExecutions: [],
           loopIterations: 0,
           conversationMessages: 0,
@@ -134,11 +170,18 @@ export class Agent {
           );
         }
 
-        // Track usage
+        // Log AI response
         if (aiResponse.usage) {
           totalUsage.promptTokens += aiResponse.usage.promptTokens;
           totalUsage.completionTokens += aiResponse.usage.completionTokens;
           totalUsage.totalTokens += aiResponse.usage.totalTokens;
+          await agentLogger.logAIResponse(
+            batch.id,
+            batch.channelId,
+            batch.guildId,
+            aiResponse.model,
+            aiResponse.usage
+          );
         }
 
         // If no tool calls, we're done
@@ -210,6 +253,21 @@ export class Agent {
         );
       }
 
+      // Log agent completion
+      await agentLogger.logAgentComplete(
+        batch.id,
+        batch.channelId,
+        batch.guildId,
+        true,
+        Date.now() - startTime,
+        undefined,
+        {
+          loopIterations: iteration,
+          conversationMessages: conversation.length,
+          totalToolExecutions: allToolExecutions.length,
+        }
+      );
+
       return {
         success: true,
         toolExecutions: allToolExecutions,
@@ -221,6 +279,23 @@ export class Agent {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       logger.error("Agent processing failed:", error);
+
+      // Log agent error
+      await agentLogger.logAgentComplete(
+        batch.id,
+        batch.channelId,
+        batch.guildId,
+        false,
+        Date.now() - startTime,
+        errorMessage
+      );
+      await agentLogger.logError(
+        batch.id,
+        batch.channelId,
+        batch.guildId,
+        errorMessage,
+        { stack: error instanceof Error ? error.stack : undefined }
+      );
 
       return {
         success: false,
