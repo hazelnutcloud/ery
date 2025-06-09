@@ -1,8 +1,17 @@
-import { OpenRouterProvider, type AIResponse, type ProcessingContext } from './providers/OpenRouterProvider';
-import { toolExecutor, type ToolExecutionResult } from '../tools';
-import { logger } from '../utils/logger';
-import type { MessageBatch } from '../taskThreads/types';
-import type { TaskThreadResult } from '../database/types';
+import {
+  OpenRouterProvider,
+  type AIResponse,
+  type ProcessingContext,
+} from "./providers/OpenRouterProvider";
+import {
+  toolExecutor,
+  toolRegistry,
+  type AgentExecutionContext,
+  type ToolExecutionResult,
+} from "../tools";
+import { logger } from "../utils/logger";
+import type { MessageBatch } from "../taskThreads/types";
+import type { TaskThreadResult } from "../database/types";
 
 export interface AgentResponse {
   success: boolean;
@@ -41,7 +50,8 @@ export class Agent {
       if (!this.aiProvider.isReady()) {
         return {
           success: false,
-          error: 'AI provider not configured. Please check your OpenRouter API key.',
+          error:
+            "AI provider not configured. Please check your OpenRouter API key.",
           toolExecutions: [],
           loopIterations: 0,
           conversationMessages: 0,
@@ -53,21 +63,39 @@ export class Agent {
       if (!contextMessage) {
         return {
           success: false,
-          error: 'No messages available in batch for processing',
+          error: "No messages available in batch for processing",
           toolExecutions: [],
           loopIterations: 0,
           conversationMessages: 0,
         };
       }
 
-      // Create tool context from the context message
-      const toolContext = toolExecutor.createToolContext(contextMessage);
+      if (contextMessage.channel.isVoiceBased()) {
+        return {
+          success: false,
+          error: "Voice channels are not supported for agent processing",
+          toolExecutions: [],
+          loopIterations: 0,
+          conversationMessages: 0,
+        };
+      }
+
+      // Create agent execution context from the context message
+      const agentContext = toolExecutor.createAgentExecutionContext(
+        batch,
+        contextMessage.channel,
+        contextMessage.guild ?? undefined
+      );
 
       // Get available tools for this context
-      const availableTools = await toolExecutor.getAvailableFunctionSchemas(toolContext);
+      const availableTools =
+        await toolExecutor.getAvailableAgentFunctionSchemas(agentContext);
 
       // Build initial conversation
-      let conversation = this.aiProvider.buildInitialConversation(batch, this.systemPrompt);
+      let conversation = this.aiProvider.buildInitialConversation(
+        batch,
+        this.systemPrompt
+      );
       const allToolExecutions: ToolExecutionResult[] = [];
       let totalUsage = {
         promptTokens: 0,
@@ -88,7 +116,7 @@ export class Agent {
         logger.debug(`Agent loop iteration ${iteration}`);
 
         let aiResponse: AIResponse;
-        
+
         if (iteration === 1) {
           // First iteration: use processContext
           const processingContext: ProcessingContext = {
@@ -100,7 +128,10 @@ export class Agent {
           aiResponse = await this.aiProvider.processContext(processingContext);
         } else {
           // Subsequent iterations: use continueConversation
-          aiResponse = await this.aiProvider.continueConversation(conversation, availableTools);
+          aiResponse = await this.aiProvider.continueConversation(
+            conversation,
+            availableTools
+          );
         }
 
         // Track usage
@@ -117,7 +148,9 @@ export class Agent {
         }
 
         // Execute tool calls
-        logger.debug(`Executing ${aiResponse.toolCalls.length} tool calls in iteration ${iteration}`);
+        logger.debug(
+          `Executing ${aiResponse.toolCalls.length} tool calls in iteration ${iteration}`
+        );
         const iterationToolExecutions: ToolExecutionResult[] = [];
 
         for (const toolCall of aiResponse.toolCalls) {
@@ -126,20 +159,26 @@ export class Agent {
             const parameters = JSON.parse(toolCall.function.arguments);
 
             // Execute the tool
-            const execution = await toolExecutor.execute({
+            const execution = await toolExecutor.executeAgentTool({
               toolName: toolCall.function.name,
               parameters,
-              context: toolContext,
+              context: agentContext,
               threadId: batch.id,
             });
 
             iterationToolExecutions.push(execution);
             allToolExecutions.push(execution);
 
-            logger.debug(`Tool ${toolCall.function.name} executed: ${execution.success ? 'success' : 'failure'}`);
-
+            logger.debug(
+              `Tool ${toolCall.function.name} executed: ${
+                execution.success ? "success" : "failure"
+              }`
+            );
           } catch (error) {
-            logger.error(`Failed to execute tool ${toolCall.function.name}:`, error);
+            logger.error(
+              `Failed to execute tool ${toolCall.function.name}:`,
+              error
+            );
             const errorExecution: ToolExecutionResult = {
               executionId: `error-${Date.now()}`,
               toolName: toolCall.function.name,
@@ -160,11 +199,15 @@ export class Agent {
           iterationToolExecutions
         );
 
-        logger.debug(`Iteration ${iteration} completed, conversation now has ${conversation.length} messages`);
+        logger.debug(
+          `Iteration ${iteration} completed, conversation now has ${conversation.length} messages`
+        );
       }
 
       if (iteration >= maxIterations) {
-        logger.warn(`Agent processing stopped after reaching max iterations (${maxIterations})`);
+        logger.warn(
+          `Agent processing stopped after reaching max iterations (${maxIterations})`
+        );
       }
 
       return {
@@ -174,10 +217,10 @@ export class Agent {
         conversationMessages: conversation.length,
         usage: totalUsage.totalTokens > 0 ? totalUsage : undefined,
       };
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error('Agent processing failed:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      logger.error("Agent processing failed:", error);
 
       return {
         success: false,
@@ -255,31 +298,6 @@ Remember: Your response content is ignored. Only tool calls matter.`;
   }
 
   /**
-   * Update system prompt (for dynamic configuration)
-   */
-  updateSystemPrompt(prompt: string): void {
-    this.systemPrompt = prompt;
-    logger.info('System prompt updated');
-  }
-
-  /**
-   * Get agent status information
-   */
-  getStatus(): {
-    aiConfigured: boolean;
-    aiModel: string;
-    availableTools: number;
-  } {
-    const toolRegistry = require('../tools').toolRegistry;
-    
-    return {
-      aiConfigured: this.aiProvider.isReady(),
-      aiModel: this.aiProvider.getModelInfo().primary,
-      availableTools: toolRegistry.getAll().length,
-    };
-  }
-
-  /**
    * Process a batch and return structured result for database storage
    */
   async processTaskThread(batch: MessageBatch): Promise<TaskThreadResult> {
@@ -287,13 +305,13 @@ Remember: Your response content is ignored. Only tool calls matter.`;
     const response = await this.processMessage(batch);
 
     // Generate summary
-    const summary = response.success 
+    const summary = response.success
       ? `Processed ${batch.messages.length} messages with ${response.toolExecutions.length} tool executions`
       : `Failed to process batch: ${response.error}`;
 
     // Convert tool executions to actions
-    const actions = response.toolExecutions.map(exec => ({
-      type: 'tool_execution',
+    const actions = response.toolExecutions.map((exec) => ({
+      type: "tool_execution",
       description: `Execute ${exec.toolName}`,
       success: exec.success,
       details: {

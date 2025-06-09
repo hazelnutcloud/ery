@@ -1,12 +1,16 @@
-import { Tool, type ToolContext, type ToolResult } from "../../base/Tool";
+import {
+  AgentTool,
+  type AgentExecutionContext,
+  type ToolResult,
+} from "../../base/AgentTool";
 import { logger } from "../../../utils/logger";
 import type { Message } from "discord.js";
 
-export class SendMessageTool extends Tool {
+export class SendMessageTool extends AgentTool {
   constructor() {
     super(
       "send_message",
-      "Send a message to the current channel or a specified channel",
+      "Bot autonomously sends messages to communicate with users based on context analysis",
       [
         {
           name: "content",
@@ -24,7 +28,8 @@ export class SendMessageTool extends Tool {
         {
           name: "replyToMessageId",
           type: "string",
-          description: "ID of the specific message to reply to (optional). If not provided, sends a regular message.",
+          description:
+            "ID of the specific message to reply to (optional). If not provided, sends a regular message.",
           required: false,
         },
       ],
@@ -36,7 +41,7 @@ export class SendMessageTool extends Tool {
   }
 
   async execute(
-    context: ToolContext,
+    context: AgentExecutionContext,
     parameters: Record<string, any>
   ): Promise<ToolResult> {
     try {
@@ -69,7 +74,7 @@ export class SendMessageTool extends Tool {
           };
         }
 
-        if (!channel.isTextBased()) {
+        if (!channel.isTextBased() || channel.isVoiceBased()) {
           return {
             success: false,
             error: "Target channel is not a text channel",
@@ -84,12 +89,18 @@ export class SendMessageTool extends Tool {
       if (replyToMessageId) {
         // Fetch the specific message to reply to
         try {
-          const messageToReplyTo = await targetChannel.messages.fetch(replyToMessageId);
+          const messageToReplyTo = await targetChannel.messages.fetch(
+            replyToMessageId
+          );
           sentMessage = await messageToReplyTo.reply(content);
         } catch (fetchError) {
           return {
             success: false,
-            error: `Failed to fetch message with ID ${replyToMessageId}: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`,
+            error: `Failed to fetch message with ID ${replyToMessageId}: ${
+              fetchError instanceof Error
+                ? fetchError.message
+                : String(fetchError)
+            }`,
           };
         }
       } else {
@@ -105,10 +116,9 @@ export class SendMessageTool extends Tool {
       }
 
       logger.info(
-        `Message sent to channel ${targetChannel.id}: ${content.substring(
-          0,
-          50
-        )}...`
+        `Message sent by agent to channel ${targetChannel.id} (batch: ${
+          context.batchInfo.id
+        }): ${content.substring(0, 50)}...`
       );
 
       return {

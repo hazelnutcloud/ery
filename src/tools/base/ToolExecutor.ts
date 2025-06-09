@@ -1,14 +1,18 @@
-import type { Message } from "discord.js";
-import { Tool, type ToolContext, type ToolResult } from "./Tool";
+import {
+  AgentTool,
+  type AgentExecutionContext,
+  type ToolResult,
+} from "./AgentTool";
 import { toolRegistry } from "./ToolRegistry";
 import { logger } from "../../utils/logger";
 import { generateId } from "../../utils/uuid";
 import type { ChatCompletionTool } from "openai/resources";
+import type { MessageBatch } from "../../taskThreads/types";
 
-export interface ToolExecutionRequest {
+export interface AgentToolExecutionRequest {
   toolName: string;
   parameters: Record<string, unknown>;
-  context: ToolContext;
+  context: AgentExecutionContext;
   threadId?: string;
 }
 
@@ -21,20 +25,44 @@ export interface ToolExecutionResult extends ToolResult {
 
 export class ToolExecutor {
   /**
-   * Execute a tool by name with given parameters
+   * Create agent execution context from a message batch and channel
    */
-  async execute(request: ToolExecutionRequest): Promise<ToolExecutionResult> {
+  createAgentExecutionContext(
+    batch: MessageBatch,
+    channel: AgentExecutionContext["channel"],
+    guild?: AgentExecutionContext["guild"]
+  ): AgentExecutionContext {
+    return {
+      channel,
+      guild,
+      botMember: guild?.members.me || undefined,
+      batchInfo: {
+        id: batch.id,
+        messageCount: batch.messages.length,
+        triggerType: batch.triggerType,
+        channelId: batch.channelId,
+        guildId: batch.guildId,
+      },
+    };
+  }
+
+  /**
+   * Execute an agent tool with the new context system
+   */
+  async executeAgentTool(
+    request: AgentToolExecutionRequest
+  ): Promise<ToolExecutionResult> {
     const startTime = Date.now();
     const executionId = generateId();
 
-    logger.info(`Executing tool ${request.toolName} (${executionId})`);
+    logger.info(`Executing agent tool ${request.toolName} (${executionId})`);
 
     try {
       // Get the tool
-      const tool = toolRegistry.get(request.toolName);
-      if (!tool) {
+      const agentTool = toolRegistry.get(request.toolName);
+      if (!agentTool) {
         const error = `Tool ${request.toolName} not found`;
-        await this.logExecution(
+        await this.logAgentExecution(
           executionId,
           request,
           { success: false, error },
@@ -50,11 +78,13 @@ export class ToolExecutor {
         };
       }
 
-      // Validate context (permissions, etc.)
-      const contextValidation = await tool.validateContext(request.context);
-      if (!contextValidation.valid) {
-        const error = `Context validation failed: ${contextValidation.error}`;
-        await this.logExecution(
+      // Validate execution context
+      const executionValidation = await agentTool.validateExecution(
+        request.context
+      );
+      if (!executionValidation.canExecute) {
+        const error = `Execution validation failed: ${executionValidation.reason}`;
+        await this.logAgentExecution(
           executionId,
           request,
           { success: false, error },
@@ -71,10 +101,10 @@ export class ToolExecutor {
       }
 
       // Validate parameters
-      const paramValidation = tool.validateParameters(request.parameters);
+      const paramValidation = agentTool.validateParameters(request.parameters);
       if (!paramValidation.valid) {
         const error = `Parameter validation failed: ${paramValidation.error}`;
-        await this.logExecution(
+        await this.logAgentExecution(
           executionId,
           request,
           { success: false, error },
@@ -92,17 +122,20 @@ export class ToolExecutor {
 
       // Execute the tool
       logger.debug(
-        `Executing ${request.toolName} with parameters:`,
+        `Executing agent tool ${request.toolName} with parameters:`,
         request.parameters
       );
-      const result = await tool.execute(request.context, request.parameters);
+      const result = await agentTool.execute(
+        request.context,
+        request.parameters
+      );
 
       // Log the execution
-      await this.logExecution(executionId, request, result, startTime);
+      await this.logAgentExecution(executionId, request, result, startTime);
 
       const executionTimeMs = Date.now() - startTime;
       logger.info(
-        `Tool ${request.toolName} executed in ${executionTimeMs}ms (${
+        `Agent tool ${request.toolName} executed in ${executionTimeMs}ms (${
           result.success ? "success" : "failure"
         })`
       );
@@ -117,9 +150,12 @@ export class ToolExecutor {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      logger.error(`Tool execution failed for ${request.toolName}:`, error);
+      logger.error(
+        `Agent tool execution failed for ${request.toolName}:`,
+        error
+      );
 
-      await this.logExecution(
+      await this.logAgentExecution(
         executionId,
         request,
         {
@@ -141,133 +177,16 @@ export class ToolExecutor {
   }
 
   /**
-   * Execute multiple tools in sequence
+   * Get available agent tools for a context
    */
-  async executeMany(
-    requests: ToolExecutionRequest[]
-  ): Promise<ToolExecutionResult[]> {
-    const results: ToolExecutionResult[] = [];
-
-    for (const request of requests) {
-      const result = await this.execute(request);
-      results.push(result);
-
-      // Stop execution if a tool fails (unless it's marked as optional)
-      if (!result.success) {
-        logger.warn(`Tool execution stopped due to failure: ${result.error}`);
-        break;
-      }
-    }
-
-    return results;
-  }
-
-  /**
-   * Create tool context from a Discord message
-   */
-  createToolContext(message: Message): ToolContext {
-    return {
-      message,
-      channel: message.channel, // Type assertion for Discord.js compatibility
-      guild: message.guild,
-      member: message.member || undefined,
-      author: message.author,
-    };
-  }
-
-  /**
-   * Log tool execution to database
-   */
-  private async logExecution(
-    executionId: string,
-    request: ToolExecutionRequest,
-    result: ToolResult,
-    startTime: number
-  ): Promise<void> {
-    try {
-      // TODO: Implement tool execution logging
-      // For now, just log to console
-      logger.info(
-        `Tool execution logged: ${executionId} - ${request.toolName} - ${
-          result.success ? "SUCCESS" : "FAILURE"
-        }`
-      );
-    } catch (error) {
-      logger.error("Failed to log tool execution:", error);
-    }
-  }
-
-  /**
-   * Get execution history for a user
-   */
-  async getExecutionHistory(userId: string, limit: number = 50) {
-    try {
-      // TODO: Implement execution history retrieval
-      // For now, return empty array
-      return [];
-    } catch (error) {
-      logger.error("Failed to get execution history:", error);
-      return [];
-    }
-  }
-
-  /**
-   * Get execution statistics
-   */
-  async getExecutionStats(guildId?: string): Promise<{
-    totalExecutions: number;
-    successRate: number;
-    averageExecutionTime: number;
-    topTools: Array<{ toolName: string; count: number }>;
-  }> {
-    try {
-      // This would need proper SQL aggregation queries
-      // For now, return placeholder data
-      return {
-        totalExecutions: 0,
-        successRate: 1.0,
-        averageExecutionTime: 0,
-        topTools: [],
-      };
-    } catch (error) {
-      logger.error("Failed to get execution stats:", error);
-      return {
-        totalExecutions: 0,
-        successRate: 0,
-        averageExecutionTime: 0,
-        topTools: [],
-      };
-    }
-  }
-
-  /**
-   * Check if a user can execute a specific tool
-   */
-  async canExecuteTool(
-    toolName: string,
-    context: ToolContext
-  ): Promise<{ canExecute: boolean; reason?: string }> {
-    const tool = toolRegistry.get(toolName);
-    if (!tool) {
-      return { canExecute: false, reason: "Tool not found" };
-    }
-
-    const validation = await tool.validateContext(context);
-    return {
-      canExecute: validation.valid,
-      reason: validation.error,
-    };
-  }
-
-  /**
-   * Get available tools for a context
-   */
-  async getAvailableTools(context: ToolContext): Promise<Tool[]> {
-    const availableTools: Tool[] = [];
+  async getAvailableAgentTools(
+    context: AgentExecutionContext
+  ): Promise<AgentTool[]> {
+    const availableTools: AgentTool[] = [];
 
     for (const tool of toolRegistry.getAll()) {
-      const validation = await tool.validateContext(context);
-      if (validation.valid) {
+      const validation = await tool.validateExecution(context);
+      if (validation.canExecute) {
         availableTools.push(tool);
       }
     }
@@ -276,13 +195,35 @@ export class ToolExecutor {
   }
 
   /**
-   * Get function schemas for available tools in context
+   * Get function schemas for available agent tools in context
    */
-  async getAvailableFunctionSchemas(
-    context: ToolContext
+  async getAvailableAgentFunctionSchemas(
+    context: AgentExecutionContext
   ): Promise<ChatCompletionTool[]> {
-    const availableTools = await this.getAvailableTools(context);
+    const availableTools = await this.getAvailableAgentTools(context);
     return availableTools.map((tool) => tool.getFunctionSchema());
+  }
+
+  /**
+   * Log agent tool execution to database
+   */
+  private async logAgentExecution(
+    executionId: string,
+    request: AgentToolExecutionRequest,
+    result: ToolResult,
+    startTime: number
+  ): Promise<void> {
+    try {
+      // TODO: Implement agent tool execution logging
+      // For now, just log to console
+      logger.info(
+        `Agent tool execution logged: ${executionId} - ${request.toolName} - ${
+          result.success ? "SUCCESS" : "FAILURE"
+        }`
+      );
+    } catch (error) {
+      logger.error("Failed to log agent tool execution:", error);
+    }
   }
 }
 

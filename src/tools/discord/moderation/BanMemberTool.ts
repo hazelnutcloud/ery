@@ -1,7 +1,7 @@
-import { Tool, type ToolContext, type ToolResult } from '../../base/Tool';
+import { AgentTool, type AgentExecutionContext, type ToolResult } from '../../base/AgentTool';
 import { logger } from '../../../utils/logger';
 
-export class BanMemberTool extends Tool {
+export class BanMemberTool extends AgentTool {
   constructor() {
     super(
       'ban_member',
@@ -28,14 +28,12 @@ export class BanMemberTool extends Tool {
       ],
       {
         botPermissions: ['BanMembers'],
-        userPermissions: ['BanMembers'],
         allowInDMs: false,
-        adminOnly: true,
       }
     );
   }
 
-  async execute(context: ToolContext, parameters: Record<string, any>): Promise<ToolResult> {
+  async execute(context: AgentExecutionContext, parameters: Record<string, any>): Promise<ToolResult> {
     try {
       const { userId, reason, deleteMessageDays = 0 } = parameters;
 
@@ -64,19 +62,11 @@ export class BanMemberTool extends Tool {
         };
       }
 
-      // Check if user is trying to ban themselves
-      if (userId === context.author.id) {
+      // Agent cannot ban itself
+      if (userId === context.botMember?.id) {
         return {
           success: false,
-          error: 'You cannot ban yourself',
-        };
-      }
-
-      // Check if user is trying to ban the bot
-      if (userId === context.guild.members.me?.id) {
-        return {
-          success: false,
-          error: 'I cannot ban myself',
+          error: 'Agent cannot ban itself',
         };
       }
 
@@ -89,21 +79,12 @@ export class BanMemberTool extends Tool {
         logger.debug(`Could not fetch member ${userId}, attempting to ban by ID`);
       }
 
-      // Check if target member has higher roles than the command user
-      if (targetMember && context.member) {
-        if (targetMember.roles.highest.position >= context.member.roles.highest.position) {
+      // Check if bot can ban this member (role hierarchy)
+      if (targetMember && context.botMember) {
+        if (targetMember.roles.highest.position >= context.botMember.roles.highest.position) {
           return {
             success: false,
-            error: 'You cannot ban a member with equal or higher roles',
-          };
-        }
-
-        // Check if bot can ban this member
-        const botMember = context.guild.members.me;
-        if (botMember && targetMember.roles.highest.position >= botMember.roles.highest.position) {
-          return {
-            success: false,
-            error: 'I cannot ban a member with equal or higher roles than me',
+            error: 'Cannot ban member with equal or higher roles than bot',
           };
         }
 
@@ -118,12 +99,12 @@ export class BanMemberTool extends Tool {
 
       // Perform the ban
       await context.guild.members.ban(userId, {
-        reason: `${reason} | Banned by ${context.author.tag}`,
+        reason: `${reason} | Autonomous moderation action`,
         deleteMessageSeconds: messageDays * 24 * 60 * 60, // Convert days to seconds
       });
 
       const username = targetMember?.user.tag || `User ID: ${userId}`;
-      logger.info(`Member banned: ${username} from guild ${context.guild.name} by ${context.author.tag}. Reason: ${reason}`);
+      logger.info(`Member banned by agent: ${username} from guild ${context.guild.name}. Reason: ${reason}`);
 
       return {
         success: true,
@@ -132,8 +113,9 @@ export class BanMemberTool extends Tool {
           username,
           reason,
           deleteMessageDays: messageDays,
-          bannedBy: context.author.tag,
+          bannedBy: 'Agent',
           bannedAt: new Date().toISOString(),
+          batchId: context.batchInfo.id,
         },
         message: `Successfully banned ${username}`,
       };

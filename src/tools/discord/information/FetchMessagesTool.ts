@@ -1,8 +1,8 @@
-import { Tool, type ToolContext, type ToolResult } from "../../base/Tool";
+import { AgentTool, type AgentExecutionContext, type ToolResult } from "../../base/AgentTool";
 import { logger } from "../../../utils/logger";
 import type { FetchMessagesOptions } from "discord.js";
 
-export class FetchMessagesTool extends Tool {
+export class FetchMessagesTool extends AgentTool {
   constructor() {
     super(
       "fetch_messages",
@@ -42,7 +42,7 @@ export class FetchMessagesTool extends Tool {
   }
 
   async execute(
-    context: ToolContext,
+    context: AgentExecutionContext,
     parameters: Record<string, any>
   ): Promise<ToolResult> {
     try {
@@ -68,7 +68,7 @@ export class FetchMessagesTool extends Tool {
           };
         }
 
-        if (!channel.isTextBased()) {
+        if (!channel.isTextBased() || channel.isVoiceBased()) {
           return {
             success: false,
             error: "Target channel is not a text channel",

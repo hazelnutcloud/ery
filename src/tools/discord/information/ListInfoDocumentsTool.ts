@@ -1,28 +1,23 @@
-import type { ToolContext, ToolResult, ToolParameter, ToolPermissions } from '../../base/Tool';
-import { Tool } from '../../base/Tool';
+import { AgentTool, type AgentExecutionContext, type ToolResult } from '../../base/AgentTool';
 import { db } from '../../../database/connection';
 import { infoDocuments } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { logger } from '../../../utils/logger';
 
-export class ListInfoDocumentsTool extends Tool {
+export class ListInfoDocumentsTool extends AgentTool {
   constructor() {
-    const parameters: ToolParameter[] = [];
-
-    const permissions: ToolPermissions = {
-      botPermissions: [],
-      allowInDMs: false, // Server-specific documents
-    };
-
     super(
       'list_info_documents',
-      'List all available information documents in the current server',
-      parameters,
-      permissions
+      'Bot autonomously lists available information documents for context analysis',
+      [],
+      {
+        botPermissions: [],
+        allowInDMs: false,
+      }
     );
   }
 
-  async execute(context: ToolContext, parameters: Record<string, unknown>): Promise<ToolResult> {
+  async execute(context: AgentExecutionContext, parameters: Record<string, unknown>): Promise<ToolResult> {
     try {
       if (!context.guild) {
         return {

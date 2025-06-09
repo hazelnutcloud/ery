@@ -1,22 +1,46 @@
 import type {
-  Message,
+  Guild,
   GuildMember,
   TextChannel,
   DMChannel,
   NewsChannel,
   VoiceChannel,
   PermissionResolvable,
+  PublicThreadChannel,
+  PrivateThreadChannel,
+  PartialDMChannel,
+  PartialGroupDMChannel,
 } from "discord.js";
 import { ChannelType } from "discord.js";
 import type { ChatCompletionTool } from "openai/resources";
+import type { BatchTrigger } from "../../taskThreads/types";
 
-// Tool execution context
-export interface ToolContext {
-  message: Message;
-  channel: Message["channel"];
-  guild?: Message["guild"];
-  member?: GuildMember;
-  author: Message["author"];
+// Agent execution context - represents the environment where the agent operates
+export interface AgentExecutionContext {
+  // Channel where the agent is operating
+  channel:
+    | TextChannel
+    | DMChannel
+    | NewsChannel
+    | PublicThreadChannel
+    | PrivateThreadChannel
+    | PartialDMChannel
+    | PartialGroupDMChannel;
+
+  // Guild context (undefined for DMs)
+  guild?: Guild;
+
+  // The bot's member in the guild (for permission checks)
+  botMember?: GuildMember;
+
+  // Batch information for context
+  batchInfo: {
+    id: string;
+    messageCount: number;
+    triggerType: BatchTrigger;
+    channelId: string;
+    guildId: string;
+  };
 }
 
 // Tool parameter definition
@@ -36,26 +60,24 @@ export interface ToolResult {
   message?: string;
 }
 
-// Tool permission requirements
-export interface ToolPermissions {
+// Agent tool permissions - what the bot needs to execute the tool
+export interface AgentToolPermissions {
   botPermissions: PermissionResolvable[];
-  userPermissions?: PermissionResolvable[];
   allowInDMs: boolean;
-  adminOnly?: boolean;
 }
 
-// Abstract base class for all tools
-export abstract class Tool {
+// Abstract base class for all agent tools
+export abstract class AgentTool {
   public readonly name: string;
   public readonly description: string;
   public readonly parameters: ToolParameter[];
-  public readonly permissions: ToolPermissions;
+  public readonly permissions: AgentToolPermissions;
 
   constructor(
     name: string,
     description: string,
     parameters: ToolParameter[] = [],
-    permissions: ToolPermissions
+    permissions: AgentToolPermissions
   ) {
     this.name = name;
     this.description = description;
@@ -64,75 +86,48 @@ export abstract class Tool {
   }
 
   /**
-   * Validate that the tool can be executed in the current context
+   * Validate that the agent can execute this tool in the current context
    */
-  async validateContext(
-    context: ToolContext
-  ): Promise<{ valid: boolean; error?: string }> {
+  async validateExecution(
+    context: AgentExecutionContext
+  ): Promise<{ canExecute: boolean; reason?: string }> {
     // Check if DMs are allowed
     if (!context.guild && !this.permissions.allowInDMs) {
       return {
-        valid: false,
-        error: "This tool cannot be used in direct messages",
+        canExecute: false,
+        reason: "This tool cannot be used in direct messages",
       };
     }
 
-    // Check bot permissions
-    if (context.guild && context.channel.type !== ChannelType.DM) {
-      const botMember = context.guild.members.me;
-      if (!botMember) {
-        return { valid: false, error: "Bot member not found in guild" };
-      }
-
+    // Check bot permissions in guild context
+    if (context.guild && context.botMember) {
+      // Check guild-level permissions
       for (const permission of this.permissions.botPermissions) {
-        if (!botMember.permissions.has(permission)) {
+        if (!context.botMember.permissions.has(permission)) {
           return {
-            valid: false,
-            error: `Bot missing permission: ${permission}`,
+            canExecute: false,
+            reason: `Bot missing permission: ${permission.toString()}`,
           };
         }
       }
 
       // Check channel-specific permissions (only for guild channels)
-      if ("guild" in context.channel && context.channel.guild) {
-        const channelPermissions = botMember.permissionsIn(context.channel);
+      if (!context.channel.isDMBased()) {
+        const channelPermissions = context.botMember.permissionsIn(
+          context.channel
+        );
         for (const permission of this.permissions.botPermissions) {
           if (!channelPermissions.has(permission)) {
             return {
-              valid: false,
-              error: `Bot missing channel permission: ${permission}`,
+              canExecute: false,
+              reason: `Bot missing channel permission: ${permission.toString()}`,
             };
           }
         }
       }
     }
 
-    // Check user permissions if specified
-    if (this.permissions.userPermissions && context.member) {
-      for (const permission of this.permissions.userPermissions) {
-        if (!context.member.permissions.has(permission)) {
-          return {
-            valid: false,
-            error: `User missing permission: ${permission}`,
-          };
-        }
-      }
-    }
-
-    // Check admin requirements
-    if (this.permissions.adminOnly && context.member) {
-      const hasAdminPermission =
-        context.member.permissions.has("Administrator");
-
-      if (!hasAdminPermission) {
-        return {
-          valid: false,
-          error: "This tool requires administrator privileges",
-        };
-      }
-    }
-
-    return { valid: true };
+    return { canExecute: true };
   }
 
   /**
@@ -263,7 +258,7 @@ export abstract class Tool {
    * Execute the tool with given parameters
    */
   abstract execute(
-    context: ToolContext,
+    context: AgentExecutionContext,
     parameters: Record<string, unknown>
   ): Promise<ToolResult>;
 }
