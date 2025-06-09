@@ -15,6 +15,20 @@
       "when": 1749432464916,
       "tag": "0001_oval_tomorrow_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1749456028590,
+      "tag": "0002_eminent_wendell_vaughn",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1749458324530,
+      "tag": "0003_mighty_warbird",
+      "breakpoints": true
     }
   ]
 }

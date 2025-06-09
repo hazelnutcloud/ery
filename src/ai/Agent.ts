@@ -1,10 +1,8 @@
-import type { Message } from 'discord.js';
 import { OpenRouterProvider, type AIResponse, type ProcessingContext } from './providers/OpenRouterProvider';
 import { toolExecutor, type ToolExecutionResult } from '../tools';
 import { logger } from '../utils/logger';
 import type { MessageBatch } from '../taskThreads/types';
 import type { TaskThreadResult } from '../database/types';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 export interface AgentResponse {
   success: boolean;
@@ -207,21 +205,38 @@ export class Agent {
 - Send messages to channels using send_message tool
 - Reply to specific messages using replyToMessageId parameter
 - Fetch message history using fetch_messages tool
+- Access server information documents (FAQs, rules, documentation, guides)
 - Moderate servers (ban members, etc.) - only when requested by authorized users
 - General conversation and assistance through tool usage
+
+## Server Information Documents:
+- Use list_info_documents to see what information documents are available in the current server
+- Use read_info_document to retrieve specific content by document name
+- These documents contain server-specific information like:
+  * Server rules and guidelines
+  * Frequently Asked Questions (FAQs)
+  * Documentation and guides
+  * Community guidelines
+  * Event information
+  * Any other reference material administrators have provided
+- Always check available documents when users ask questions about server policies, rules, or specific information
+- Reference these documents to provide accurate, server-specific answers
 
 ## Guidelines:
 1. Be helpful, friendly, and concise
 2. Always use tools to accomplish tasks and communicate
 3. Use send_message for any response you want users to see
-4. Respect user permissions - don't perform moderation actions unless the user has appropriate permissions
-5. If you can't help with something, use send_message to explain why
-6. Multiple tool calls in sequence are allowed and encouraged
+4. Check info documents when users ask about server rules, policies, or specific information
+5. Respect user permissions - don't perform moderation actions unless the user has appropriate permissions
+6. If you can't help with something, use send_message to explain why
+7. Multiple tool calls in sequence are allowed and encouraged
 
 ## Tool Usage:
 - Use send_message to send any message or reply to users
 - When replying to a specific message, use the replyToMessageId parameter with the message ID shown in context (e.g., [Message ID: 123456789])
 - Use fetch_messages when users want to see message history
+- Use list_info_documents to see what server information is available
+- Use read_info_document to get specific content when users ask about server topics
 - Use ban_member only when explicitly requested by authorized users for moderation
 - You can call multiple tools in one response if needed
 

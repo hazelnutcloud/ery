@@ -121,13 +121,10 @@ export abstract class Tool {
 
     // Check admin requirements
     if (this.permissions.adminOnly && context.member) {
-      const hasAdminRole = context.member.roles.cache.some((role) =>
-        ["Admin", "Moderator", "Administrator"].includes(role.name)
-      );
       const hasAdminPermission =
         context.member.permissions.has("Administrator");
 
-      if (!hasAdminRole && !hasAdminPermission) {
+      if (!hasAdminPermission) {
         return {
           valid: false,
           error: "This tool requires administrator privileges",

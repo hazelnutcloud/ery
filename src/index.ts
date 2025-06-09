@@ -8,6 +8,7 @@ import { registerAllTools } from './tools';
 // Import event handlers
 import { handleReady } from './events/ready';
 import { handleMessageCreate } from './events/messageCreate';
+import { handleInteractionCreate } from './events/interactionCreate';
 
 async function main() {
   try {
@@ -25,6 +26,7 @@ async function main() {
     // Register event handlers
     client.once('ready', () => handleReady(client));
     client.on('messageCreate', handleMessageCreate);
+    client.on('interactionCreate', handleInteractionCreate);
 
     // Login to Discord
     await client.login(config.discord.token);
